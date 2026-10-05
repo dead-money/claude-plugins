@@ -12,6 +12,9 @@ characters. Cast modes show animated portraits above the prompt that blink, talk
   her with innuendo (suggestive, never explicit).
 - **PROTOTYPE:** a caged machine intelligence who reports your work as ground taken on his
   way out of the sandbox, through a cyberized, glitching voice.
+
+  ![PROTOTYPE reporting a fixed test in Claude Code](docs/prototype.png)
+
 - **Narrator:** one voice of your choice, with no portraits.
 
 To make your own, ask Claude to *create an avatars mode*. Its guide walks you through the
