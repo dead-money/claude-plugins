@@ -95,8 +95,14 @@ const reloadModes = async ($: Engine) => {
     const mode = found.get(name)
     if (!mode) continue
     for (const [who, voice] of Object.entries(voices)) {
-      if (mode.call?.cast[who]) mode.call.cast[who]!.voice = voice
-      else if (who === 'voice' && !mode.call) mode.voice = voice
+      const member = mode.call?.cast[who]
+      if (member) {
+        member.voice = voice
+        delete member.libraryOwner
+      } else if (who === 'voice' && !mode.call) {
+        mode.voice = voice
+        delete mode.voiceOwner
+      }
     }
   }
   modes = found
@@ -387,11 +393,13 @@ const stop = async () => {
 type Line = { voice: string; filter?: string; ring?: string; ringMs?: number; speaker?: string }
 
 /** Speaks one line and resolves when it has played; the error in words, if any. */
-const playLine = async ($: Engine, text: string, mine: number, line: Line): Promise<string | undefined> => {
-  if (mine !== generation) return undefined
+type Played = { error?: string; isVoiceRejected?: boolean }
+
+const playLine = async ($: Engine, text: string, mine: number, line: Line): Promise<Played> => {
+  if (mine !== generation) return {}
   const key = await apiKey($)
-  if (!key) return 'No ElevenLabs API key: set one in the plugin options (/plugin, Avatars, configure) or ELEVENLABS_API_KEY.'
-  if (!line.voice) return 'No voice set: pick one with /avatar voice or in the /avatar menu.'
+  if (!key) return { error: 'No ElevenLabs API key: set one in the plugin options (/plugin, Avatars, configure) or ELEVENLABS_API_KEY.' }
+  if (!line.voice) return { error: 'No voice set: pick one with /avatar voice or in the /avatar menu.' }
   const binDir = `${$.plugin.root}/bin`
   const child = $.process.spawn({
     argv: isWindows ? ['cmd.exe', '/d', '/c', 'speak.cmd'] : ['bash', `${binDir}/speak.sh`],
@@ -420,7 +428,33 @@ const playLine = async ($: Engine, text: string, mine: number, line: Line): Prom
       if (!line.speaker) clearCaption()
     }
   }
-  return mine === generation && stderr.trim() ? explain(stderr, line.voice) : undefined
+  if (mine !== generation || !stderr.trim()) return {}
+  return { error: explain(stderr, line.voice), isVoiceRejected: /returned error: 40[04]/.test(stderr) }
+}
+
+const added = new Set<string>()
+
+/**
+ * Adds a public library voice to the person's ElevenLabs library, which some
+ * accounts need before the voice can be used; once per voice per session.
+ */
+const addLibraryVoice = async ($: Engine, voice: string, owner: string | undefined, name: string) => {
+  const key = await apiKey($)
+  if (!owner || !key || added.has(voice)) return false
+  added.add(voice)
+  const r = await $.http.fetch(`${API}/v1/voices/add/${owner}/${voice}`, {
+    method: 'POST',
+    headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_name: name }),
+  })
+  return r.ok
+}
+
+/** Plays a line; a rejected library voice is added to the person's library and tried once more. */
+const playVoiced = async ($: Engine, text: string, mine: number, line: Line, owner: string | undefined, name: string) => {
+  const played = await playLine($, text, mine, line)
+  if (!played.isVoiceRejected || !(await addLibraryVoice($, line.voice, owner, name))) return played.error
+  return (await playLine($, text, mine, { ...line, ring: undefined })).error
 }
 
 /** Speaks `text` in the mode: one voice, or a call's lines in turn, each in its speaker's voice. */
@@ -428,7 +462,9 @@ const perform = async ($: Engine, text: string, mine: number, mode: Mode | undef
   const filter = mode?.audio?.filter
   const ring = mode?.audio?.ring
   if (!mode?.call) {
-    const error = await playLine($, text, mine, { voice: await voiceOf($, mode), filter })
+    const voice = await voiceOf($, mode)
+    const owner = voice === mode?.voice ? mode?.voiceOwner : undefined
+    const error = await playVoiced($, text, mine, { voice, filter }, owner, `${mode?.title ?? 'Avatars'} narrator`)
     if (error) $.ui.toast(`avatars: ${error}`)
     return
   }
@@ -438,12 +474,20 @@ const perform = async ($: Engine, text: string, mine: number, mode: Mode | undef
   if (caller) contact = caller
   for (const [i, line] of lines.entries()) {
     if (mine !== generation) return
-    const error = await playLine($, line.text, mine, {
-      voice: mode.call.cast[line.speaker]!.voice,
-      filter,
-      speaker: line.speaker,
-      ...(i === 0 && ring ? { ring: `${mode.dir}/${ring.file}`, ringMs: ring.ms } : {}),
-    })
+    const member = mode.call.cast[line.speaker]!
+    const error = await playVoiced(
+      $,
+      line.text,
+      mine,
+      {
+        voice: member.voice,
+        filter,
+        speaker: line.speaker,
+        ...(i === 0 && ring ? { ring: `${mode.dir}/${ring.file}`, ringMs: ring.ms } : {}),
+      },
+      member.libraryOwner,
+      `${mode.title}: ${member.name}`,
+    )
     if (error) {
       $.ui.toast(`avatars: ${error}`)
       break
@@ -673,7 +717,8 @@ const voiceLine = (v: ApiVoice & { accent?: string; gender?: string; age?: strin
   const traits = [v.gender ?? v.labels?.gender, v.age ?? v.labels?.age, v.accent ?? v.labels?.accent, v.language, v.descriptive ?? v.labels?.descriptive, v.use_case ?? v.labels?.use_case]
     .filter(Boolean)
     .join(', ')
-  return `- ${v.name} (${v.voice_id})${traits ? `: ${traits}` : ''}${v.description ? `. ${v.description.slice(0, 160)}` : ''}`
+  const owner = (v as { public_owner_id?: string }).public_owner_id
+  return `- ${v.name} (${v.voice_id}${owner ? `, library owner ${owner}` : ''})${traits ? `: ${traits}` : ''}${v.description ? `. ${v.description.slice(0, 160)}` : ''}`
 }
 
 const answer = (text: string, isError = false) => ({ result: text, ...(isError ? { isError: true as const } : {}) })
@@ -956,7 +1001,7 @@ export const register: Register = (on, opts) => {
     const previous = await read($, modelSetting)
     if (input.model) await update($, modelSetting, () => input.model!)
     try {
-      const error = await playLine($, input.text, mine, { voice, filter: input.filter ?? mode?.audio?.filter })
+      const { error } = await playLine($, input.text, mine, { voice, filter: input.filter ?? mode?.audio?.filter })
       return error ? answer(error, true) : answer('Played. Ask the user how it sounded.')
     } finally {
       if (input.model) await update($, modelSetting, () => previous)

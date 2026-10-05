@@ -19,7 +19,7 @@ const DUO = {
     fallback: 'helper',
     cast: {
       boss: { name: 'BOSS', aliases: ['chief'], voice: 'BossVoice00000000000', ink: '#ff0000', persona: 'Loud.', speaksAbout: 'Orders.', idle: [{ frame: 'neutral', weight: 1, ms: [500, 900] }] },
-      helper: { name: 'HELPER', voice: 'HelperVoice000000000', persona: 'Quick.', speaksAbout: 'The work.' },
+      helper: { name: 'HELPER', voice: 'HelperVoice000000000', libraryOwner: 'owner7', persona: 'Quick.', speaksAbout: 'The work.' },
     },
     turns: 'They trade lines.',
     kinds: [{ weight: 1, text: 'A report.', note: 'Nobody else speaks.' }],
@@ -91,11 +91,15 @@ const engine = (on: On, files: Record<string, string> = {}) => {
     configSets.push({ key: e.key, value: e.value })
     return { value: e.value } as never
   })
+  /** What a playback writes to stderr, by its curl config: nothing unless a test says. */
+  const playback = { stderr: (_input: string): string | undefined => undefined }
   on('process.spawn', async function* (_$, e) {
     spawned.push({ argv: e.argv, env: { ...(e.env ?? {}) }, input: e.input ?? '' })
+    const stderr = playback.stderr(e.input ?? '')
+    if (stderr) yield { stream: 'stderr', text: stderr }
     return { value: { code: 0, signal: null } } as never
   })
-  return { spawned, toasts, configSets, fs }
+  return { spawned, toasts, configSets, fs, playback }
 }
 
 const run = ($: Engine, args: string) => $.command.run({ command: 'avatar', args })
@@ -322,4 +326,25 @@ test('/avatar recast gives a character a personal voice that survives a reload, 
   expect(curlOf(spawned[0]!.input).url).toContain('/Personal000000000000/')
   expect((await run($, 'recast boss')).text).toContain("back to the mode's own voice")
   expect(JSON.parse(fs['/home/voices.json']!)).toEqual({})
+})
+
+test('a rejected library voice is added to the account and the line retried once', WITH_KEY, async ($, on) => {
+  const { spawned, playback } = engine(on)
+  const posts: string[] = []
+  on('http.fetch', async (_$, e) => {
+    posts.push(`${e.init?.method} ${e.url}`)
+    return { value: { status: 200, ok: true, headers: {}, text: '{}' } } as never
+  })
+  let rejected = false
+  playback.stderr = input => {
+    if (rejected || !input.includes('/HelperVoice000000000/')) return undefined
+    rejected = true
+    return 'curl: (22) The requested URL returned error: 404'
+  }
+  const clock = mock.clock(on, { now: 1_000 })
+  await run($, 'reload')
+  await run($, 'mode duo')
+  await clock.advance(3_000)
+  expect(posts).toEqual(['POST https://api.elevenlabs.io/v1/voices/add/owner7/HelperVoice000000000'])
+  expect(spawned.map(sp => curlOf(sp.input).url.split('/')[5])).toEqual(['BossVoice00000000000', 'HelperVoice000000000', 'HelperVoice000000000'])
 })

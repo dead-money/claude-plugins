@@ -102,7 +102,10 @@ so audition before committing.
   member's `tags` and say why in the persona file.
 - Tags work only with v3/v4 models (the plugin default is `eleven_v4_turbo`).
 
-Record each member's `voice` id and a `tags` list that suited them in auditions.
+Record each member's `voice` id, its `libraryOwner` from the search results, and a
+`tags` list that suited them in auditions. Voices they designed or cloned themselves work
+only with their own key: if the mode is for sharing, use library voices in `mode.json`
+and keep their own in `~/.claude/avatars/voices.json` (`/avatar recast` writes it).
 
 ## Step 5: Portraits (cast modes with a band)
 

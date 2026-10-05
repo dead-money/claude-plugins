@@ -33,6 +33,7 @@ There are two kinds of mode:
 | `title` | Shown in menus. |
 | `description` | One line shown under the mode picker. |
 | `voice` | Single-voice modes: the default ElevenLabs voice id. People can pick another. |
+| `voiceOwner` | That voice's library owner id, as `libraryOwner` is for a cast member. |
 | `persona` | Single-voice modes: text added to Sonnet's instructions, e.g. a character to speak as. |
 | `personaTags` | Extra persona guidance that is used only with v3/v4 voice models, which perform `[audio tags]`. |
 | `call` | Makes it a cast mode. See below. |
@@ -71,7 +72,8 @@ a length based on the reply's size. This keeps the scenes from all sounding the 
 |---|---|
 | `name` | How Sonnet writes them before a line, in capitals. |
 | `aliases` | Other names Sonnet might use ("queen", "boss"). |
-| `voice` | Their ElevenLabs voice id. |
+| `voice` | Their ElevenLabs voice id. Shared modes need public library voices: voices you made yourself only work with your key. |
+| `libraryOwner` | The library voice's owner id (`search_voices` shows it), so the plugin can add the voice to an account that needs it first. |
 | `ink` | Their name colour in the band, `#rrggbb`. |
 | `persona` | How they talk: tics, forms of address, dialect, attitude, relationships. |
 | `speaksAbout` | What kind of work brings them into a scene. |

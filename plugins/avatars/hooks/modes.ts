@@ -16,6 +16,8 @@ export type CastMember = {
   aliases?: string[]
   /** Their ElevenLabs voice id. */
   voice: string
+  /** A public library voice's owner id, so it can be added to an account that needs that first. */
+  libraryOwner?: string
   /** Their name and subtitle colour in the band, `#rrggbb`. */
   ink?: string
   persona: string
@@ -34,6 +36,8 @@ export type ModeFile = {
   description: string
   /** A single-voice mode's default voice; the person may pick another. */
   voice?: string
+  /** The default voice's library owner id, as for a cast member. */
+  voiceOwner?: string
   /** A single-voice mode's persona, added to Sonnet's instructions. */
   persona?: string
   /** Extra persona guidance used only when the voice model performs tags. */
