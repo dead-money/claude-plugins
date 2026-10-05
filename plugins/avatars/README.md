@@ -67,6 +67,8 @@ need a terminal at least 90 columns wide, and subtitles need about 140.
 A mode is a folder in `~/.claude/avatars/modes/` holding a `mode.json` (cast,
 personalities, voices, sound), baked portraits and an optional ring sound.
 [MODES.md](MODES.md) documents the format, and the built-in [modes](modes) are complete
-examples. Modes are easy to share as folders.
+examples. Modes are easy to share as folders, or as a mode pack: a plugin with an
+`avatars/modes/` folder that installs and updates like any plugin, on every machine you use
+(see [MODES.md](MODES.md#mode-packs)).
 
 Each reply's text is sent to Anthropic for the rewrite and to ElevenLabs for the audio.

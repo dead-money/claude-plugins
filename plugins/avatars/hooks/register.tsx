@@ -47,6 +47,8 @@ let isInteractive = true
 let isLoaded = false
 let isWindows = false
 let userModesDir = ''
+/** The `modes/` folders of installed mode packs, in load order. */
+let packModesDirs: string[] = []
 /** The person's own voices for any mode's characters: `{ mode: { member: voiceId } }`. */
 let voicesFile = ''
 let personal: Record<string, Record<string, string>> = {}
@@ -67,16 +69,58 @@ const readMode = async ($: Engine, dir: string, name: string) => {
   }
 }
 
-/** Every mode in the plugin's folder, then the person's, which win on a name clash. */
+const readJson = async ($: Engine, path: string, errors: string[]) => {
+  if (!(await $.fs.exists(path))) return undefined
+  try {
+    return JSON.parse(await $.fs.read(path)) as unknown
+  } catch (err) {
+    errors.push(`${path} does not parse (${String(err)})`)
+    return undefined
+  }
+}
+
+type InstalledPlugins = { plugins?: Record<string, Array<{ scope?: string; installPath?: string }>> }
+
+/**
+ * The `avatars/` folder of every plugin that has one: mode packs. Packs come
+ * from user-scope installs Claude Code lists as installed and not disabled, and
+ * from `CLAUDE_CODE_PLUGIN_DIRS` folders.
+ */
+const packDirs = async ($: Engine, home: string, errors: string[]) => {
+  const claudeDir = ((await $.env.get('CLAUDE_CONFIG_DIR'))?.trim() || `${home}/.claude`).replace(/[\\/]+$/, '')
+  const installed = (await readJson($, `${claudeDir}/plugins/installed_plugins.json`, errors)) as InstalledPlugins | undefined
+  const settings = (await readJson($, `${claudeDir}/settings.json`, errors)) as { enabledPlugins?: Record<string, boolean> } | undefined
+  const roots: string[] = []
+  for (const id of Object.keys(installed?.plugins ?? {}).sort()) {
+    if (settings?.enabledPlugins?.[id] === false) continue
+    for (const install of installed?.plugins?.[id] ?? []) {
+      if (install.scope === 'user' && install.installPath) roots.push(install.installPath)
+    }
+  }
+  const listed = (await $.env.get('CLAUDE_CODE_PLUGIN_DIRS')) ?? ''
+  for (const dir of listed.split(isWindows ? ';' : ':')) {
+    if (dir.trim()) roots.push(dir.trim().replace(/^~(?=[\\/]|$)/, home))
+  }
+  const dirs: string[] = []
+  for (const root of roots) {
+    const dir = `${root.replace(/[\\/]+$/, '')}/avatars`
+    if (root !== $.plugin.root && !dirs.includes(dir) && (await $.fs.exists(`${dir}/modes`))) dirs.push(dir)
+  }
+  return dirs
+}
+
+/** The plugin's modes, then each pack's, then the person's own; later ones win on a name clash. */
 const reloadModes = async ($: Engine) => {
   isWindows = /^[A-Za-z]:[\\/]/.test($.plugin.root) || $.plugin.root.includes('\\')
-  const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
-  const avatarsDir = home ? `${home.replace(/[\\/]+$/, '')}/.claude/avatars` : ''
+  const home = ((await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? '').replace(/[\\/]+$/, '')
+  const avatarsDir = home ? `${home}/.claude/avatars` : ''
   userModesDir = avatarsDir && `${avatarsDir}/modes`
   voicesFile = avatarsDir && `${avatarsDir}/voices.json`
   const found = new Map<string, Mode>()
   const errors: string[] = []
-  for (const root of [`${$.plugin.root}/modes`, userModesDir]) {
+  const packs = home ? await packDirs($, home, errors) : []
+  packModesDirs = packs.map(pack => `${pack}/modes`)
+  for (const root of [`${$.plugin.root}/modes`, ...packModesDirs, userModesDir]) {
     if (!root || !(await $.fs.exists(root))) continue
     for (const entry of await $.fs.list(root)) {
       const dir = `${root}/${entry.name}`
@@ -86,15 +130,18 @@ const reloadModes = async ($: Engine) => {
       else found.set(mode.name, mode)
     }
   }
-  personal = {}
-  if (voicesFile && (await $.fs.exists(voicesFile))) {
-    try {
-      personal = JSON.parse(await $.fs.read(voicesFile))
-    } catch (err) {
-      errors.push(`voices.json does not parse (${String(err)})`)
-    }
+  const voiceSets: Array<Record<string, Record<string, string>>> = []
+  for (const pack of packs) {
+    const voices = await readJson($, `${pack}/voices.json`, errors)
+    if (voices) voiceSets.push(voices as Record<string, Record<string, string>>)
   }
-  for (const [name, voices] of Object.entries(personal)) {
+  personal = {}
+  if (voicesFile) {
+    const voices = await readJson($, voicesFile, errors)
+    if (voices) personal = voices as Record<string, Record<string, string>>
+  }
+  voiceSets.push(personal)
+  for (const [name, voices] of voiceSets.flatMap(set => Object.entries(set))) {
     const mode = found.get(name)
     if (!mode) continue
     for (const [who, voice] of Object.entries(voices)) {
@@ -1037,12 +1084,14 @@ export const register: Register = (on, opts) => {
         `Format reference: ${root}/MODES.md`,
         `Portrait bake script: ${root}/bin/bake-portraits.py <mode folder> --preview <sheet.png> (needs Python 3 with Pillow and numpy)`,
         `Platform: ${isWindows ? 'Windows' : 'macOS or Linux'}`,
+        `Mode packs: ${packModesDirs.length ? packModesDirs.join(', ') : 'none installed'} (a plugin with an avatars/modes/ folder; see MODES.md)`,
         `Loaded modes: ${[...modes.keys()].join(', ')}${modeErrors.length ? `; not loaded: ${modeErrors.join(' | ')}` : ''}`,
       ].join('\n'),
     )
   })
 
   on('tool.call', { tool: 'mcp__avatars__check_mode' }, async ($, e) => {
+    await ensureLoaded($)
     const dir = String((e as unknown as { path: string }).path).replace(/[\\/]+$/, '')
     const name = dir.split(/[\\/]/).pop() ?? ''
     if (!isModeName(name)) return answer(`The folder name ${name} must be lowercase letters, digits, - or _: it is the mode's name.`, true)
@@ -1064,8 +1113,8 @@ export const register: Register = (on, opts) => {
       }
     }
     if (mode.audio?.ring && !(await $.fs.exists(`${dir}/${mode.audio.ring.file}`))) notes.push(`The ring sound ${mode.audio.ring.file} is missing.`)
-    if (!dir.startsWith(userModesDir) && !dir.startsWith(`${$.plugin.root}/modes`)) {
-      notes.push(`It loads only from ${userModesDir}/${name}; move it there.`)
+    if (![userModesDir, `${$.plugin.root}/modes`, ...packModesDirs].some(root => dir.startsWith(`${root}/`))) {
+      notes.push(`It loads only from ${userModesDir}/${name} or an installed mode pack; move it there.`)
     }
     await reloadModes($)
     return answer(

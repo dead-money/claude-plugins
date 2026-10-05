@@ -170,5 +170,7 @@ phone. A ring sound plays before each scene starts.
 ## Sharing
 
 A mode is a self-contained folder, so they can zip it or put it in a git repository and
-others can drop it into their own `~/.claude/avatars/modes/`. Remind them that voices made
+others can drop it into their own `~/.claude/avatars/modes/`. To share several modes, or
+carry their own between machines, they can publish a mode pack (MODES.md, "Mode packs"):
+a plugin repository with the modes under `avatars/modes/`. Remind them that voices made
 in their own ElevenLabs account work for others only if they share them to the voice library.

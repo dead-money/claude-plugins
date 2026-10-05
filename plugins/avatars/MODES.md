@@ -16,6 +16,28 @@ To change only voices, not a whole mode, use `~/.claude/avatars/voices.json`:
 `{ "coven": { "ankhara": "<voice id>" } }` (single-voice modes use the key `voice`).
 `/avatar recast <character> <voice id>` writes this file for the current mode.
 
+## Mode packs
+
+A mode pack is a plugin that carries modes, so they install and update like any plugin and
+follow you between machines. It needs no code: a manifest and an `avatars/` folder laid out
+like `~/.claude/avatars/`.
+
+```
+my-avatars/
+  .claude-plugin/plugin.json    { "name": "my-avatars", "version": "0.1.0", "description": "..." }
+  avatars/modes/pirates/        a mode folder, as above
+  avatars/voices.json           voice overrides, as above (optional)
+```
+
+Put it in a marketplace (a git repository with `.claude-plugin/marketplace.json`, private
+works), then on each machine run `claude plugin marketplace add <owner>/<repo>` and
+`claude plugin install my-avatars@<marketplace>`. Install it at user scope; project-scope
+installs are not read. While working on a pack, name its folder in `CLAUDE_CODE_PLUGIN_DIRS`.
+
+Modes load in this order, and a later mode with the same name replaces an earlier one:
+built-ins, then packs, then `~/.claude/avatars/modes/`. Voice overrides apply in the same
+order, so your own `voices.json` beats a pack's.
+
 After editing, run `/avatar reload` (or ask Claude to check the mode, which reloads too).
 
 There are two kinds of mode:

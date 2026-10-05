@@ -1,7 +1,8 @@
 // Modes are folders of data: `mode.json` (who speaks, how, and how it sounds),
 // and for a cast mode `portraits.json` (baked by bin/bake-portraits.py) and an
-// optional ring sound. The built-in modes ship in the plugin's `modes/`; the
-// person's own live in `~/.claude/avatars/modes/` and win on a name clash.
+// optional ring sound. The built-in modes ship in the plugin's `modes/`, mode
+// packs (other plugins) in their `avatars/modes/`, and the person's own in
+// `~/.claude/avatars/modes/`; later ones win on a name clash.
 // MODES.md documents the format.
 
 import type { CourtTheme, Portrait } from './court'

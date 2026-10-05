@@ -62,6 +62,7 @@ const engine = (on: On, files: Record<string, string> = {}) => {
   const toasts: string[] = []
   const configSets: Array<{ key: string; value: unknown }> = []
   const relative = (path: string) =>
+    path.startsWith('/packs/') || path.includes('/.claude/plugins/') ? path :
     path.includes('/.claude/avatars/') ? path.replace(/^.*\/\.claude\/avatars\//, '/home/') : path.replace(/^.*?\/modes(?=\/|$)/, '/plugin/modes')
   const isDir = (path: string) => Object.keys(fs).some(f => f.startsWith(`${relative(path)}/`))
   on('fs.exists', async (_$, e) => ({ value: relative(e.path) in fs || isDir(e.path) }) as never)
@@ -123,6 +124,39 @@ test('modes load from the mode folders; a broken one is reported, not loaded', a
   expect(listed).toContain('duo: The Duo')
   expect(listed).toContain('narrator: Narrator')
   expect(listed).toContain('broken: mode.json does not parse')
+})
+
+test('installed, enabled mode packs add modes and voices; the person\'s own still win', WITH_KEY, async ($, on) => {
+  const installed = {
+    version: 2,
+    plugins: {
+      'pack@market': [{ scope: 'user', installPath: '/packs/pack/1.0.0' }],
+      'off@market': [{ scope: 'user', installPath: '/packs/off/1.0.0' }],
+    },
+  }
+  const { spawned, fs } = engine(on, {
+    '/home/me/.claude/plugins/installed_plugins.json': JSON.stringify(installed),
+    '/home/me/.claude/settings.json': JSON.stringify({ enabledPlugins: { 'pack@market': true, 'off@market': false } }),
+    '/packs/pack/1.0.0/avatars/modes/pirates/mode.json': JSON.stringify({ ...NARRATOR, title: 'Pirates' }),
+    '/packs/pack/1.0.0/avatars/modes/narrator/mode.json': JSON.stringify({ ...NARRATOR, title: 'Pack Narrator' }),
+    '/packs/pack/1.0.0/avatars/voices.json': JSON.stringify({ duo: { boss: 'PackBoss', helper: 'PackHelper' } }),
+    '/packs/off/1.0.0/avatars/modes/ghosts/mode.json': JSON.stringify({ ...NARRATOR, title: 'Ghosts' }),
+    '/home/voices.json': JSON.stringify({ duo: { helper: 'MineHelper' } }),
+  })
+  const clock = mock.clock(on, { now: 1_000 })
+  await run($, 'reload')
+  const listed = (await run($, 'modes')).text
+  expect(listed).toContain('pirates: Pirates')
+  expect(listed).toContain('narrator: Pack Narrator')
+  expect(listed).not.toContain('ghosts')
+  await run($, 'mode duo')
+  await clock.advance(2_000)
+  spawned.length = 0
+  await run($, 'test 1')
+  await clock.advance(2_000)
+  expect(spawned.map(s => curlOf(s.input).url)).toEqual([expect.stringContaining('/PackBoss/'), expect.stringContaining('/MineHelper/')])
+  await run($, 'recast boss Personal000000000000')
+  expect(JSON.parse(fs['/home/voices.json']!)).toEqual({ duo: { helper: 'MineHelper', boss: 'Personal000000000000' } })
 })
 
 test('switching mode plays its sample: each line in its member voice, the ring before the first', WITH_KEY, async ($, on) => {
