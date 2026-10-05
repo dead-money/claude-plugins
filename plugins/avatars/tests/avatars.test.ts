@@ -294,7 +294,7 @@ test('the menu opens and its mode picker switches mode', WITH_KEY, async ($, on)
 
 test('check_mode rejects a folder name that cannot be a mode name', async ($, on) => {
   engine(on)
-  const r = await $.tool.call({ tool: 'mcp__avatars__check_mode', input: { path: '/home/me/.claude/avatars/modes/My Mode' } } as never)
+  const r = await $.tool.call({ tool: 'mcp__avatars__check_mode', path: '/home/me/.claude/avatars/modes/My Mode' } as never)
   expect(JSON.stringify(r)).toContain('must be lowercase')
 })
 
@@ -305,7 +305,7 @@ test('search_voices queries the shared library with the key and lists ids', WITH
     asked.push({ url: e.url, key: e.init?.headers?.['xi-api-key'] })
     return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ voices: [{ voice_id: 'Shared00000000000000', public_owner_id: 'owner1', name: 'Queenly', accent: 'egyptian' }] }) } } as never
   })
-  const r = await $.tool.call({ tool: 'mcp__avatars__search_voices', input: { query: 'regal queen', gender: 'female' } } as never)
+  const r = await $.tool.call({ tool: 'mcp__avatars__search_voices', query: 'regal queen', gender: 'female' } as never)
   expect(asked[0]?.url).toBe('https://api.elevenlabs.io/v1/shared-voices?search=regal%20queen&page_size=12&gender=female')
   expect(asked[0]?.key).toBe(KEY)
   expect(JSON.stringify(r)).toContain('Shared00000000000000')

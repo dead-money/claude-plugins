@@ -18,6 +18,8 @@ export type CastMember = {
   voice: string
   /** A public library voice's owner id, so it can be added to an account that needs that first. */
   libraryOwner?: string
+  /** Shifts their voice's pitch, keeping its speed: 0.95 is 5% lower. */
+  pitch?: number
   /** Their name and subtitle colour in the band, `#rrggbb`. */
   ink?: string
   persona: string

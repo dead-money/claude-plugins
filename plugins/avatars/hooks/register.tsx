@@ -99,6 +99,7 @@ const reloadModes = async ($: Engine) => {
       if (member) {
         member.voice = voice
         delete member.libraryOwner
+        delete member.pitch
       } else if (who === 'voice' && !mode.call) {
         mode.voice = voice
         delete mode.voiceOwner
@@ -432,6 +433,13 @@ const playLine = async ($: Engine, text: string, mine: number, line: Line): Prom
   return { error: explain(stderr, line.voice), isVoiceRejected: /returned error: 40[04]/.test(stderr) }
 }
 
+/** The mode's filter with a pitch shift in front; speed is kept. */
+const pitched = (filter: string | undefined, pitch: number | undefined) => {
+  if (!pitch || pitch === 1 || !(pitch > 0.5 && pitch < 2)) return filter
+  const shift = `asetrate=22050*${pitch},aresample=22050,atempo=${(1 / pitch).toFixed(4)}`
+  return filter ? `${shift},${filter}` : shift
+}
+
 const added = new Set<string>()
 
 /**
@@ -481,7 +489,7 @@ const perform = async ($: Engine, text: string, mine: number, mode: Mode | undef
       mine,
       {
         voice: member.voice,
-        filter,
+        filter: pitched(filter, member.pitch),
         speaker: line.speaker,
         ...(i === 0 && ring ? { ring: `${mode.dir}/${ring.file}`, ringMs: ring.ms } : {}),
       },
@@ -768,6 +776,7 @@ export const register: Register = (on, opts) => {
           model: { type: 'string', description: `An ElevenLabs model id (default: the session's, e.g. ${DEFAULT_MODEL})` },
           mode: { type: 'string', description: 'A loaded mode whose audio filter to apply' },
           filter: { type: 'string', description: 'An ffmpeg -filter_complex graph to try instead of a mode\'s' },
+          pitch: { type: 'number', description: 'Shift the pitch, keeping speed: 0.95 is 5% lower' },
         },
         required: ['voice', 'text'],
       },
@@ -967,7 +976,7 @@ export const register: Register = (on, opts) => {
   })
 
   on('tool.call', { tool: 'mcp__avatars__search_voices' }, async ($, e) => {
-    const input = e.input as { query: string; gender?: string; age?: string; accent?: string; limit?: number }
+    const input = e as unknown as { query: string; gender?: string; age?: string; accent?: string; limit?: number }
     const params: Array<[string, string]> = [['search', input.query], ['page_size', String(Math.min(30, input.limit ?? 12))]]
     for (const field of ['gender', 'age', 'accent'] as const) if (input[field]) params.push([field, input[field]!])
     const query = params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
@@ -992,7 +1001,7 @@ export const register: Register = (on, opts) => {
   })
 
   on('tool.call', { tool: 'mcp__avatars__audition' }, async ($, e) => {
-    const input = e.input as { voice: string; text: string; model?: string; mode?: string; filter?: string }
+    const input = e as unknown as { voice: string; text: string; model?: string; mode?: string; filter?: string; pitch?: number }
     const voice = parseVoice(input.voice) ?? input.voice
     const mode = input.mode ? modes.get(input.mode) : undefined
     if (input.model && !/^eleven_[a-z0-9_]+$/.test(input.model)) return answer(`Not an ElevenLabs model id: ${input.model}`, true)
@@ -1001,7 +1010,7 @@ export const register: Register = (on, opts) => {
     const previous = await read($, modelSetting)
     if (input.model) await update($, modelSetting, () => input.model!)
     try {
-      const { error } = await playLine($, input.text, mine, { voice, filter: input.filter ?? mode?.audio?.filter })
+      const { error } = await playLine($, input.text, mine, { voice, filter: pitched(input.filter ?? mode?.audio?.filter, input.pitch) })
       return error ? answer(error, true) : answer('Played. Ask the user how it sounded.')
     } finally {
       if (input.model) await update($, modelSetting, () => previous)
@@ -1024,7 +1033,7 @@ export const register: Register = (on, opts) => {
   })
 
   on('tool.call', { tool: 'mcp__avatars__check_mode' }, async ($, e) => {
-    const dir = String((e.input as { path: string }).path).replace(/[\\/]+$/, '')
+    const dir = String((e as unknown as { path: string }).path).replace(/[\\/]+$/, '')
     const name = dir.split(/[\\/]/).pop() ?? ''
     if (!isModeName(name)) return answer(`The folder name ${name} must be lowercase letters, digits, - or _: it is the mode's name.`, true)
     const mode = await readMode($, dir, name)

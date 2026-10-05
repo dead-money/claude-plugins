@@ -73,6 +73,7 @@ a length based on the reply's size. This keeps the scenes from all sounding the 
 | `name` | How Sonnet writes them before a line, in capitals. |
 | `aliases` | Other names Sonnet might use ("queen", "boss"). |
 | `voice` | Their ElevenLabs voice id. Shared modes need public library voices: voices you made yourself only work with your key. |
+| `pitch` | Shifts their voice's pitch, keeping its speed: `0.95` is 5% lower. Dropped when you recast them. |
 | `libraryOwner` | The library voice's owner id (`search_voices` shows it), so the plugin can add the voice to an account that needs it first. |
 | `ink` | Their name colour in the band, `#rrggbb`. |
 | `persona` | How they talk: tics, forms of address, dialect, attitude, relationships. |
