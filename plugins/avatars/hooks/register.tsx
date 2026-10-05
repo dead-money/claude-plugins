@@ -1033,7 +1033,7 @@ export const register: Register = (on, opts) => {
     return answer(
       [
         `New modes go in: ${userModesDir}/<name>/`,
-        `Built-in example modes: ${root}/modes/coven (cast with portraits), ${root}/modes/narrator (single voice)`,
+        `Built-in example modes: ${root}/modes/coven (cast with portraits), ${root}/modes/prototype (solo with audio effects), ${root}/modes/narrator (single voice)`,
         `Format reference: ${root}/MODES.md`,
         `Portrait bake script: ${root}/bin/bake-portraits.py <mode folder> --preview <sheet.png> (needs Python 3 with Pillow and numpy)`,
         `Platform: ${isWindows ? 'Windows' : 'macOS or Linux'}`,

@@ -155,4 +155,5 @@ ffmpeg -i ring.wav -f s16le -ar 22050 -ac 1 ring.pcm
 
 `ms` is the file size in bytes divided by 44.1.
 
-The built-in `coven` mode is a complete example.
+The built-in `coven` mode is a complete example of a cast, and `prototype` of a solo mode
+with audio effects.
