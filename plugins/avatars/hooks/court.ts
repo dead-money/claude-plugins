@@ -24,6 +24,10 @@ export type CourtTheme = {
   subtitle: number
   /** The level meter centred in the bottom rule: `label` then `glyph`s lit by the voice. */
   meter: { label: string; glyph: string; lit: number; dim: number }
+  /** `codec`: the host on the right, a frequency panel between, the subtitles beside the host. */
+  layout?: 'codec'
+  /** Codec layout: the frequency on the panel while each member is on the line. */
+  frequencies?: Record<string, string>
 }
 
 export type CourtState = {
@@ -42,11 +46,11 @@ export type CourtState = {
 
 const DEFAULT_COLOR = 0x01000000
 const HALF_BLOCK = 0x2580
-const GAP = 3
+export const GAP = 3
 /** Characters a cell may hold beyond printable ASCII (each width 1). */
 const EXTRA_GLYPHS = new Set([...'…—–‘’“”'])
 
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
+export const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
 
 // ── base64 (decoded once per art; encoded every frame) ──
 
@@ -85,7 +89,7 @@ const toBase64 = (bytes: Uint8Array) => {
 }
 
 
-const fade = (from: number, to: number, t: number) => {
+export const fade = (from: number, to: number, t: number) => {
   let out = 0
   for (const shift of [16, 8, 0]) {
     const a = (from >> shift) & 0xff
@@ -96,7 +100,7 @@ const fade = (from: number, to: number, t: number) => {
 }
 
 /** Words of `text` in `count` rows of `width`, the last cut with an ellipsis. */
-const wrapRows = (text: string, width: number, count: number) => {
+export const wrapRows = (text: string, width: number, count: number) => {
   const rows: string[] = []
   let line = ''
   for (const word of text.split(' ')) {
@@ -117,12 +121,12 @@ const wrapRows = (text: string, width: number, count: number) => {
 }
 
 // Accented Latin letters (chérie, señora) are one cell wide too; NFC folds a combining accent into its letter.
-const cellSafe = (text: string) =>
+export const cellSafe = (text: string) =>
   [...text.normalize('NFC')].map(c => (/[\x20-\x7e\u00a0-\u017f]/.test(c) || EXTRA_GLYPHS.has(c) ? c : '?')).join('')
 
 
 /** Pixels and text into cells: half blocks, the terminal's background where empty. */
-const packCells = (
+export const packCells = (
   columns: number,
   rows: number,
   pixels: Array<number | undefined>,
@@ -163,7 +167,7 @@ const COURT_PANEL = 46
 const COURT_SPARE = 4
 
 const courtDecoded = new Map<string, Uint8Array>()
-const courtPixels = (theme: CourtTheme, who: string, rows: number, frame: string) => {
+export const courtPixels = (theme: CourtTheme, who: string, rows: number, frame: string) => {
   const art = (theme.portraits[who] ?? theme.portraits[theme.host]!)[rows] as Portrait
   // Blinks are a single frame: a half-blink shows it too.
   const name = frame in art.frames ? frame : frame.startsWith('blink') ? 'blink' : 'neutral'

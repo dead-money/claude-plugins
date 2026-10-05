@@ -81,6 +81,7 @@ a length based on the reply's size. This keeps the scenes from all sounding the 
 | `tags` | Audio tags that suit them. |
 | `idle` | `[{ "frame": "smirk", "weight": 1, "ms": [1500, 3000] }]`: looks shown while others talk. |
 | `accent` | `{ "frame": "roar", "when": "shout\|furious" }`: a frame mixed into talking when a line's tags match (a case-insensitive regex). |
+| `frequency` | Codec layout only: the frequency the panel shows while they are on the line, e.g. `"141.12"`. |
 
 ### `band`
 
@@ -95,6 +96,15 @@ a length based on the reply's size. This keeps the scenes from all sounding the 
 `frameLit` is the frame colour of whoever is talking. The meter glyph must be one terminal
 cell wide. The band needs about 90 columns to show both portraits, and about 140 to show
 the centre panel with the subtitles.
+
+`"layout": "codec"` draws a radio-call band instead: whoever is on the line on the left,
+the host on the right, a panel between them with signal bars and a seven-segment frequency
+display, and the subtitles to the right of the host. `title` labels the panel's top rule and
+the meter's `label` its bottom rule; the meter's `lit` and `dim` colour the display, and the
+glyph is unused. `frequency` is the default frequency, which a member's own `frequency`
+overrides. Whoever is not talking is dimmed. Portraits may be taller than wide, as long as
+every member has the same size. When the terminal is narrow the panel goes first, then the
+subtitles.
 
 ## Portraits
 

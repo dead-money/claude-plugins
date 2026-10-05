@@ -1,6 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Engine, PluginOptions, Register, Timer } from 'claude-code'
 
+import { codecCells, codecRowsFor } from './codec'
 import { courtCells, courtRowsFor } from './court'
 import { buildMode, callPersona, demoHas, isModeName, parseCall, planCall, type Mode } from './modes'
 import type { Setting, VoiceChoice } from '../types'
@@ -265,7 +266,9 @@ const othersOf = (mode: Mode) => Object.keys(mode.call!.cast).filter(who => who 
 
 const rowsWanted = () => {
   const mode = shownMode()
-  return mode?.theme && want ? courtRowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS) : undefined
+  if (!mode?.theme || !want) return undefined
+  const rowsFor = mode.theme.layout === 'codec' ? codecRowsFor : courtRowsFor
+  return rowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS)
 }
 
 /** A fresh frame at the size last measured, or undefined when the band does not fit. */
@@ -280,7 +283,8 @@ const nextFrame = async ($: Engine) => {
   const others = othersOf(mode)
   const beside = contact && others.includes(contact) ? contact : (others[0] ?? mode.call!.host)
   const inCast = (who: string | undefined) => (who && mode.call!.cast[who] ? who : undefined)
-  const cells = courtCells(mode.theme, want.columns, rows, {
+  const cellsFor = mode.theme.layout === 'codec' ? codecCells : courtCells
+  const cells = cellsFor(mode.theme, want.columns, rows, {
     speaker: inCast(speaker),
     contact: beside,
     faces: { host: actorFrame(mode, mode.call!.host, now, said), contact: actorFrame(mode, beside, now, said) },

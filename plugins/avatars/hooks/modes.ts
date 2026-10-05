@@ -31,6 +31,8 @@ export type CastMember = {
   idle?: Array<{ frame: string; weight: number; ms: [number, number] }>
   /** A frame that punctuates talking when a line's tags match `when` (a regex, case-insensitive). */
   accent?: { frame: string; when: string }
+  /** Codec layout: the frequency the panel shows while they are on the line. */
+  frequency?: string
 }
 
 export type ModeFile = {
@@ -76,6 +78,10 @@ export type ModeFile = {
     corner: string
     subtitle: string
     meter: { label: string; glyph: string; lit: string; dim: string }
+    /** `codec`: the host on the right, a frequency panel between, the subtitles beside the host. */
+    layout?: 'codec'
+    /** Codec layout: the frequency shown for a member without their own. */
+    frequency?: string
   }
   audio?: {
     /** An ffmpeg -filter_complex graph over mono 22050 Hz audio. */
@@ -121,6 +127,7 @@ const problemsOf = (file: ModeFile, portraits: Record<string, Record<number, Por
     }
     if (file.band && !portraits) problems.push('band needs portraits.json')
     if (file.band && portraits && !portraits[call.host]) problems.push(`portraits.json has no ${call.host}`)
+    if (file.band?.layout !== undefined && file.band.layout !== 'codec') problems.push(`band.layout ${file.band.layout} is not a layout (codec, or leave it out)`)
   } else if (file.band) {
     problems.push('band needs a call (a cast)')
   }
@@ -147,6 +154,13 @@ const themeOf = (file: ModeFile, portraits: Record<string, Record<number, Portra
       lit: color(band.meter.lit, 0xffffff),
       dim: color(band.meter.dim, 0x333333),
     },
+    layout: band.layout,
+    frequencies: Object.fromEntries(
+      cast.flatMap(([who, m]) => {
+        const frequency = m.frequency ?? band.frequency
+        return frequency ? [[who, frequency] as const] : []
+      }),
+    ),
   }
 }
 

@@ -240,6 +240,30 @@ test('a cast mode with portraits draws its band; a mode without one removes it',
   expect(rasterOf(await after.drawn())).toBeUndefined()
 })
 
+test('a codec band shows its panel when wide and shrinks to fit when narrow', WITH_KEY, async ($, on) => {
+  const sizes = (frames: string[]) => Object.fromEntries([20, 16, 12, 10, 8].map(rows => [rows, portrait(rows, frames)]))
+  const frames = ['neutral', 'blink', 'talk_a', 'talk_b']
+  engine(on, {
+    '/plugin/modes/codec/mode.json': JSON.stringify({ ...DUO, title: 'Codec', band: { ...DUO.band, title: 'P T T', layout: 'codec', frequency: '140.85' } }),
+    '/plugin/modes/codec/portraits.json': JSON.stringify({ boss: sizes(frames), helper: sizes(frames) }),
+  })
+  on('ui.render', async () => ({ type: 'Box', props: {}, children: [] }) as never)
+  const clock = mock.clock(on, { now: 1_000 })
+  await run($, 'reload')
+  await run($, 'mode codec')
+  await clock.advance(3_000)
+  const wide = await $.ui.mount({ plugin: 'avatars', surface: 'terminal', component: 'AbovePrompt', props: BAND(170) })
+  const raster = rasterOf(await wide.drawn())
+  expect(raster?.props?.rows).toBe(20)
+  expect(rasterText(raster!)).toContain('P T T')
+  await wide.unmount()
+
+  const narrow = await $.ui.mount({ plugin: 'avatars', surface: 'terminal', component: 'AbovePrompt', props: BAND(60) })
+  const small = rasterOf(await narrow.drawn())
+  expect(small?.props?.rows).toBe(12)
+  expect(rasterText(small!)).not.toContain('P T T')
+})
+
 test('/avatar test picks a demo by number or by a speaker in it', WITH_KEY, async ($, on) => {
   const { spawned } = engine(on)
   const clock = mock.clock(on, { now: 1_000 })
