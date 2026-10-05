@@ -22,6 +22,10 @@ Without a crop the centred square of the image is used. Without regions,
 each frame keeps only the areas that actually differ from neutral, which
 already hides most redraw drift.
 
+Optional <mode>/art/emblem.png is an image for the court band's centre panel,
+drawn above the subtitles on bands of 12 rows or more; near-black pixels are
+left out, so draw it on black.
+
 Writes <mode>/portraits.json: per member, per band height in terminal rows
 (20, 16, 12, 10, 8), a portrait two pixels per row, as wide as the crop's shape
 makes it (square without a crop), frames as base64
@@ -41,6 +45,8 @@ except ImportError:
     sys.exit('bake-portraits needs Pillow and numpy: pip install pillow numpy')
 
 ROWS = [20, 16, 12, 10, 8]
+# The emblem's height in pixels for each band height that has room for it.
+EMBLEM_HEIGHTS = {20: 24, 16: 16, 12: 10}
 REGION_OF = {'blink': 'eyes', 'talk_a': 'mouth', 'talk_b': 'mouth'}
 
 
@@ -140,10 +146,20 @@ def main():
         }
         sheet_rows.append(list(sizes[20].values()))
 
+    emblem_path = os.path.join(art_dir, 'emblem.png')
+    if os.path.exists(emblem_path):
+        emblem = Image.open(emblem_path).convert('RGB')
+        out['$emblem'] = {}
+        for rows, h in EMBLEM_HEIGHTS.items():
+            w = round(h * emblem.size[0] / emblem.size[1])
+            im = emblem.resize((w * 4, h * 4), Image.LANCZOS).filter(ImageFilter.UnsharpMask(3, 70, 2)).resize((w, h), Image.LANCZOS)
+            out['$emblem'][str(rows)] = {'w': w, 'h': h, 'frames': {'neutral': base64.b64encode(np.asarray(im).tobytes()).decode()}}
+
     path = os.path.join(mode_dir, 'portraits.json')
     with open(path, 'w') as f:
         json.dump(out, f, separators=(',', ':'))
-    print(f'wrote {path} ({os.path.getsize(path) // 1024} KB, {len(out)} members)')
+    extra = ', an emblem' if '$emblem' in out else ''
+    print(f'wrote {path} ({os.path.getsize(path) // 1024} KB, {len(cast)} members{extra})')
 
     if preview:
         scale = 6

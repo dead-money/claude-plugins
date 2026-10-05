@@ -26,6 +26,8 @@ export type CourtTheme = {
   meter: { label: string; glyph: string; lit: number; dim: number }
   /** `codec`: a radio call with a frequency panel. `solo`: the host alone, centred in glyph rain. */
   layout?: 'codec' | 'solo'
+  /** Court layout: an image over the subtitles, per band height, that brightens with the voice. */
+  emblem?: Record<number, Portrait>
   /** Solo layout: the glyphs the rain is made of. */
   glyphs?: string[]
   /** Codec layout: the frequency on the panel while each member is on the line. */
@@ -169,6 +171,17 @@ const COURT_PANEL = 46
 const COURT_SPARE = 4
 
 const courtDecoded = new Map<string, Uint8Array>()
+/** The emblem's top, in pixels: just under the title's rule. */
+const EMBLEM_TOP = 3
+const courtEmblemPixels = (theme: CourtTheme, rows: number, emblem: Portrait) => {
+  const key = `${theme.title}$emblem${rows}`
+  let rgb = courtDecoded.get(key)
+  if (!rgb) {
+    rgb = fromBase64(emblem.frames.neutral ?? '')
+    courtDecoded.set(key, rgb)
+  }
+  return rgb
+}
 export const courtPixels = (theme: CourtTheme, who: string, rows: number, frame: string) => {
   const art = (theme.portraits[who] ?? theme.portraits[theme.host]!)[rows] as Portrait
   // Blinks are a single frame: a half-blink shows it too.
@@ -269,21 +282,46 @@ export const courtCells = (theme: CourtTheme, columns: number, rows: number, sta
   write(px0, 0, rule, theme.frame)
   centred(0, ` ${theme.title} `, theme.frameLit)
   write(px0, rows - 1, rule, theme.frame)
+  // An empty glyph leaves only the label.
   const { meter } = theme
-  const lit = Math.round(clamp01(state.level) * METER_GLYPHS)
+  const glyphs = meter.glyph ? METER_GLYPHS : 0
+  const lit = Math.round(clamp01(state.level) * glyphs)
   const label = ` ${meter.label} `
-  const meterLeft = px0 + Math.floor((panel - label.length - METER_GLYPHS - 1) / 2)
+  const meterLeft = px0 + Math.floor((panel - label.length - glyphs - (glyphs ? 1 : 0)) / 2)
   write(meterLeft, rows - 1, label, theme.frame)
-  for (let i = 0; i < METER_GLYPHS; i++) write(meterLeft + label.length + i, rows - 1, meter.glyph, i < lit ? meter.lit : meter.dim)
-  write(meterLeft + label.length + METER_GLYPHS, rows - 1, ' ', theme.frame)
+  for (let i = 0; i < glyphs; i++) write(meterLeft + label.length + i, rows - 1, meter.glyph, i < lit ? meter.lit : meter.dim)
+  if (glyphs) write(meterLeft + label.length + glyphs, rows - 1, ' ', theme.frame)
+
+  // The emblem under the title, flickering a little and brightening while someone speaks.
+  let first = 2
+  const emblem = theme.emblem?.[rows]
+  if (emblem) {
+    const rgb = courtEmblemPixels(theme, rows, emblem)
+    const k = 0.6 + 0.4 * clamp01(state.level) + (Math.random() - 0.5) * 0.08
+    const ex = px0 + Math.floor((panel - emblem.w) / 2)
+    for (let y = 0; y < emblem.h; y++) {
+      for (let x = 0; x < emblem.w; x++) {
+        const i = (y * emblem.w + x) * 3
+        const r = rgb[i] ?? 0
+        const g = rgb[i + 1] ?? 0
+        const b = rgb[i + 2] ?? 0
+        if (r + g + b < 24) continue
+        const c = (v: number) => Math.min(255, Math.round(v * k))
+        dot(ex + x, EMBLEM_TOP + y, (c(r) << 16) | (c(g) << 8) | c(b))
+      }
+    }
+    first = Math.ceil((EMBLEM_TOP + emblem.h) / 2) + 1
+  }
 
   const by = state.speaker ?? state.captionBy
   if (state.caption) {
-    const lines = wrapRows(cellSafe(state.caption), panel - 4, Math.max(1, rows - 6))
-    const top = Math.max(2, Math.floor((rows - lines.length - 2) / 2))
+    const space = rows - 1 - first
+    const head = by ? (space >= 5 ? 2 : 1) : 0
+    const lines = wrapRows(cellSafe(state.caption), panel - 4, Math.max(1, space - head))
+    const top = first + Math.max(0, Math.floor((space - lines.length - head) / 2))
     const ink = by ? (theme.ink[by] ?? theme.subtitle) : theme.subtitle
     if (by) centred(top, theme.names[by] ?? by.toUpperCase(), state.speaker ? ink : fade(ink, 0, 0.35))
-    lines.forEach((line, i) => centred(top + 2 + i, line, theme.subtitle))
+    lines.forEach((line, i) => centred(top + head + i, line, theme.subtitle))
   }
   return packCells(columns, rows, pixels, text)
 }

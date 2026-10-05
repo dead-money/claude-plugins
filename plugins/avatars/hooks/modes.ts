@@ -162,6 +162,7 @@ const themeOf = (file: ModeFile, portraits: Record<string, Record<number, Portra
       dim: color(band.meter.dim, 0x333333),
     },
     layout: band.layout,
+    emblem: portraits.$emblem,
     glyphs: band.glyphs ? [...band.glyphs] : undefined,
     frequencies: Object.fromEntries(
       cast.flatMap(([who, m]) => {

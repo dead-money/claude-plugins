@@ -95,7 +95,8 @@ a length based on the reply's size. This keeps the scenes from all sounding the 
 ```
 
 `frameLit` is the frame colour of whoever is talking. The meter glyph must be one terminal
-cell wide. The band needs about 90 columns to show both portraits, and about 140 to show
+cell wide; an empty glyph shows the label alone, with no meter. An `art/emblem.png` (drawn on
+black) is baked into the centre panel above the subtitles, brightening while someone speaks. The band needs about 90 columns to show both portraits, and about 140 to show
 the centre panel with the subtitles.
 
 `"layout": "codec"` draws a radio-call band instead, sized like the court: whoever is on the
