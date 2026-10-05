@@ -1,0 +1,115 @@
+# Mode format
+
+A mode is a folder. Built-in modes live in the plugin's `modes/`. Your own go in
+`~/.claude/avatars/modes/<name>/`; one with the same name as a built-in replaces it.
+The folder name is the mode's name: lowercase letters, digits, `-` and `_`.
+
+```
+~/.claude/avatars/modes/pirates/
+  mode.json         who speaks and how (required)
+  portraits.json    baked portraits for the band (cast modes; made by bin/bake-portraits.py)
+  ring.pcm          a sound before each call (optional)
+  art/              your source images and bake.json (only the bake script reads these)
+```
+
+After editing, run `/avatar reload` (or ask Claude to check the mode, which reloads too).
+
+There are two kinds of mode:
+
+- **Single-voice.** One voice reads a short spoken version of each reply. It needs
+  `title`, `description`, `voice`, `sample` and `demos`, and optionally `persona` and `audio`.
+- **Cast.** Sonnet writes each reply as a short scene of `NAME:` lines, and each line plays
+  in its speaker's voice. It adds `call`, plus `band` and `portraits.json` for the animated
+  portraits above the prompt.
+
+## Fields
+
+| Field | What it does |
+|---|---|
+| `title` | Shown in menus. |
+| `description` | One line shown under the mode picker. |
+| `voice` | Single-voice modes: the default ElevenLabs voice id. People can pick another. |
+| `persona` | Single-voice modes: text added to Sonnet's instructions, e.g. a character to speak as. |
+| `personaTags` | Extra persona guidance that is used only with v3/v4 voice models, which perform `[audio tags]`. |
+| `call` | Makes it a cast mode. See below. |
+| `band` | The band's look. Needs `call` and `portraits.json`. |
+| `audio.filter` | An ffmpeg `-filter_complex` graph applied to every line (mono, 22050 Hz). |
+| `audio.ring` | `{ "file": "ring.pcm", "ms": 1300 }`: raw s16le mono 22050 Hz audio played before a call's first line, and its length. |
+| `sample` | Lines played when someone switches to the mode. |
+| `demos` | Arrays of lines played by `/avatar test`. |
+| `scenarios` | `{ "key": { "title": "...", "script": [lines] } }`: longer scripted calls for `/avatar scenario key`. |
+
+In cast modes, lines are written as `NAME: [tag] text`. Tags only work with v3/v4 models,
+and the plugin strips them for other models.
+
+### `call`
+
+| Field | What it does |
+|---|---|
+| `premise` | What the scene is: who is present, who did the work, who is always there. Sonnet reads this first. |
+| `host` | The member always in the band's left frame. |
+| `fallback` | Who speaks a reply that came back without `NAME:` lines. |
+| `cast` | Members by key, in the order Sonnet reads them. |
+| `extras` | Extra cast notes, e.g. a pet that never speaks. |
+| `style` | A paragraph on tone. |
+| `turns` | Who trades lines with whom, and when others may cut in. |
+| `accuracy` | What must survive the character voice, on top of the outcome and any question for the user. |
+| `distinct` | Completes "Keep each voice distinct: ...". |
+| `reporters` | Weighted picks for who reports each time: `[{ "weight": 3, "text": "whoever fits best." }]`. |
+| `kinds` | Weighted kinds of scene, picked per reply: `[{ "weight": 2, "text": "A report: ...", "note": "Nobody else speaks." }]`. |
+
+Each reply gets a randomly picked `<call>` block containing a reporter, a kind of scene and
+a length based on the reply's size. This keeps the scenes from all sounding the same.
+
+### A cast member
+
+| Field | What it does |
+|---|---|
+| `name` | How Sonnet writes them before a line, in capitals. |
+| `aliases` | Other names Sonnet might use ("queen", "boss"). |
+| `voice` | Their ElevenLabs voice id. |
+| `ink` | Their name colour in the band, `#rrggbb`. |
+| `persona` | How they talk: tics, forms of address, dialect, attitude, relationships. |
+| `speaksAbout` | What kind of work brings them into a scene. |
+| `tags` | Audio tags that suit them. |
+| `idle` | `[{ "frame": "smirk", "weight": 1, "ms": [1500, 3000] }]`: looks shown while others talk. |
+| `accent` | `{ "frame": "roar", "when": "shout\|furious" }`: a frame mixed into talking when a line's tags match (a case-insensitive regex). |
+
+### `band`
+
+```json
+"band": {
+  "title": "T H E   C O V E N",
+  "frame": "#5a0f1c", "frameLit": "#c8a050", "corner": "#e0c080", "subtitle": "#f2e6e8",
+  "meter": { "label": "THIRST", "glyph": "♥", "lit": "#d0203c", "dim": "#3c1018" }
+}
+```
+
+`frameLit` is the frame colour of whoever is talking. The meter glyph must be one terminal
+cell wide. The band needs about 90 columns to show both portraits, and about 140 to show
+the centre panel with the subtitles.
+
+## Portraits
+
+Put images in `art/<member>/`: `neutral.png`, `blink.png`, `talk_a.png`, `talk_b.png`, plus
+any expression frames that `idle` or `accent` name. Every frame should be the same picture
+as `neutral`, with only the eyes, mouth or expression changed. Then run:
+
+```
+python3 bin/bake-portraits.py ~/.claude/avatars/modes/<name> --preview sheet.png
+```
+
+`art/bake.json` can set the head crop and the regions where each frame may differ from
+neutral. The script's header explains both.
+
+## Ring sounds
+
+Convert any short sound with ffmpeg:
+
+```
+ffmpeg -i ring.wav -f s16le -ar 22050 -ac 1 ring.pcm
+```
+
+`ms` is the file size in bytes divided by 44.1.
+
+The built-in `coven` and `skrapvox` modes are complete examples.

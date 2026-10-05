@@ -1,0 +1,58 @@
+{
+  "name": "avatars",
+  "version": "0.1.0",
+  "description": "Claude speaks a short version of each reply through ElevenLabs, as a narrator or a cast of characters with animated portraits above the prompt",
+  "author": {
+    "name": "Dead Money"
+  },
+  "homepage": "https://github.com/dead-money/claude-plugins/tree/main/plugins/avatars",
+  "repository": "https://github.com/dead-money/claude-plugins",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "ElevenLabs API key",
+      "description": "Your own key from elevenlabs.io (Developers, API keys). Needs text-to-speech and voices read access. ELEVENLABS_API_KEY works too.",
+      "sensitive": true,
+      "required": false
+    },
+    "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "Who speaks in new sessions. Your own modes in ~/.claude/avatars/modes work here too.",
+      "default": "coven"
+    },
+    "speak": {
+      "type": "boolean",
+      "title": "Speak replies",
+      "description": "Speak each reply in interactive sessions.",
+      "default": true
+    },
+    "model": {
+      "type": "string",
+      "title": "Voice model",
+      "description": "The ElevenLabs model. v3/v4 models perform [audio tags].",
+      "default": "eleven_v4_turbo",
+      "options": [
+        "eleven_v4_turbo",
+        "eleven_v4",
+        "eleven_v3",
+        "eleven_flash_v2_5",
+        "eleven_multilingual_v2"
+      ]
+    },
+    "voice": {
+      "type": "string",
+      "title": "Narrator voice",
+      "description": "An ElevenLabs voice id for single-voice modes. Empty uses the mode's own.",
+      "default": ""
+    },
+    "ffmpeg": {
+      "type": "string",
+      "title": "ffmpeg path",
+      "description": "Leave empty to use ffmpeg from PATH.",
+      "default": ""
+    }
+  }
+}

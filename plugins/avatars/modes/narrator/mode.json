@@ -1,0 +1,14 @@
+{
+  "title": "Narrator",
+  "description": "One voice of your choice reads a short spoken version of each reply. No portraits.",
+  "voice": "fgDJOgmENIR82PueQrVs",
+  "persona": "",
+  "sample": [
+    "[warmly] Hello. [pause] I'll read my replies to you from now on."
+  ],
+  "demos": [
+    [
+      "[quietly pleased] The build passed. [pause] Three warnings are left, and I can take care of them next if you like."
+    ]
+  ]
+}
