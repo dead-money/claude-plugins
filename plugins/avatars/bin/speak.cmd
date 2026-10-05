@@ -10,10 +10,11 @@ for %%F in ("%AVATAR_FFMPEG%") do set "AVATAR_FFPLAY=%%~dpFffplay"
 if "%AVATAR_FFMPEG%"=="ffmpeg" set "AVATAR_FFPLAY=ffplay"
 if not defined AVATAR_FILTER set "AVATAR_FILTER=anull"
 
+rem Without the probe flags ffmpeg and ffplay read about five seconds of a piped input before they start.
 rem A pipe after `if` would pipe the whole if statement, so jump past the ring instead.
 if not defined AVATAR_RING goto speak
-"%AVATAR_FFMPEG%" -nostdin -hide_banner -loglevel error -f s16le -ar 22050 -ac 1 -i "%AVATAR_RING%" -f wav - | "%AVATAR_FFPLAY%" -hide_banner -nodisp -autoexit -loglevel error -i -
+"%AVATAR_FFMPEG%" -nostdin -hide_banner -loglevel error -f s16le -ar 22050 -ac 1 -i "%AVATAR_RING%" -f wav - | "%AVATAR_FFPLAY%" -hide_banner -nodisp -autoexit -loglevel error -probesize 32 -analyzeduration 0 -fflags nobuffer -f wav -i -
 
 :speak
-curl -sSf -K - | "%AVATAR_FFMPEG%" -hide_banner -loglevel error -f s16le -ar 22050 -ac 1 -i - -filter_complex "%AVATAR_FILTER%" -f wav - | "%AVATAR_FFPLAY%" -hide_banner -nodisp -autoexit -loglevel error -i -
+curl -sSf -K - | "%AVATAR_FFMPEG%" -hide_banner -loglevel error -probesize 32 -analyzeduration 0 -fflags nobuffer -f s16le -ar 22050 -ac 1 -i - -filter_complex "%AVATAR_FILTER%" -f wav - | "%AVATAR_FFPLAY%" -hide_banner -nodisp -autoexit -loglevel error -probesize 32 -analyzeduration 0 -fflags nobuffer -f wav -i -
 exit /b %errorlevel%

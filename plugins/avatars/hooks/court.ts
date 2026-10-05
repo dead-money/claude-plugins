@@ -24,8 +24,10 @@ export type CourtTheme = {
   subtitle: number
   /** The level meter centred in the bottom rule: `label` then `glyph`s lit by the voice. */
   meter: { label: string; glyph: string; lit: number; dim: number }
-  /** `codec`: the host on the right, a frequency panel between, the subtitles beside the host. */
-  layout?: 'codec'
+  /** `codec`: a radio call with a frequency panel. `solo`: the host alone, centred in glyph rain. */
+  layout?: 'codec' | 'solo'
+  /** Solo layout: the glyphs the rain is made of. */
+  glyphs?: string[]
   /** Codec layout: the frequency on the panel while each member is on the line. */
   frequencies?: Record<string, string>
 }
@@ -161,7 +163,7 @@ export const packCells = (
   return toBase64(new Uint8Array(words.buffer))
 }
 
-const COURT_ROWS = [20, 16, 12, 10, 8]
+export const COURT_ROWS = [20, 16, 12, 10, 8]
 const METER_GLYPHS = 10
 const COURT_PANEL = 46
 const COURT_SPARE = 4
@@ -196,24 +198,29 @@ export const courtPanel = (theme: CourtTheme, rows: number, columns: number) => 
   return art && 2 * (art.w + 2) + 2 * GAP + COURT_PANEL <= columns ? COURT_PANEL : 0
 }
 
-const courtLastRows = new Map<string, number | undefined>()
+const lastRows = new Map<string, number | undefined>()
 
-/** The tallest band that fits with its panel, else the tallest whose frames fit. */
-export const courtRowsFor = (theme: CourtTheme, maxRows: number, columns: number, preferRows: number) => {
-  const best = (spare: number) => {
-    const sizes = COURT_ROWS.filter(r => r <= Math.min(maxRows, preferRows) && courtFits(theme, r, columns - spare))
-    return sizes.find(r => courtPanel(theme, r, columns - spare) > 0) ?? sizes[0]
-  }
-  // Hysteresis: keep the size in use unless it stops fitting, and grow only with room to spare,
-  // so a width hovering at a threshold doesn't flip the band between sizes.
-  const last = courtLastRows.get(theme.title)
+/**
+ * The band height for `key`, from `best(spare)`: the height that fits with `spare` columns held back.
+ * Keeps the size in use unless it stops fitting, and grows only with room to spare, so a width
+ * hovering at a threshold doesn't flip the band between sizes.
+ */
+export const steadyRows = (key: string, best: (spare: number) => number | undefined) => {
+  const last = lastRows.get(key)
   const now = best(0)
   const roomy = best(COURT_SPARE)
   const keep = last !== undefined && now !== undefined && last <= now && (roomy ?? 0) <= last
   const rows = keep ? last : (roomy ?? now)
-  courtLastRows.set(theme.title, rows)
+  lastRows.set(key, rows)
   return rows
 }
+
+/** The tallest band that fits with its panel, else the tallest whose frames fit. */
+export const courtRowsFor = (theme: CourtTheme, maxRows: number, columns: number, preferRows: number) =>
+  steadyRows(theme.title, spare => {
+    const sizes = COURT_ROWS.filter(r => r <= Math.min(maxRows, preferRows) && courtFits(theme, r, columns - spare))
+    return sizes.find(r => courtPanel(theme, r, columns - spare) > 0) ?? sizes[0]
+  })
 
 /** A court band's cells for one frame, `rows` tall. */
 export const courtCells = (theme: CourtTheme, columns: number, rows: number, state: CourtState) => {

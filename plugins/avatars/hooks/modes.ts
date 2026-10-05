@@ -5,6 +5,7 @@
 // MODES.md documents the format.
 
 import type { CourtTheme, Portrait } from './court'
+import type { Effect } from './effects'
 
 type Weighted = { weight: number; text: string }
 
@@ -78,14 +79,18 @@ export type ModeFile = {
     corner: string
     subtitle: string
     meter: { label: string; glyph: string; lit: string; dim: string }
-    /** `codec`: the host on the right, a frequency panel between, the subtitles beside the host. */
-    layout?: 'codec'
+    /** `codec`: a radio call with a frequency panel. `solo`: the host alone, centred in glyph rain. */
+    layout?: 'codec' | 'solo'
+    /** Solo layout: the characters the rain falls in, each one cell wide. */
+    glyphs?: string
     /** Codec layout: the frequency shown for a member without their own. */
     frequency?: string
   }
   audio?: {
     /** An ffmpeg -filter_complex graph over mono 22050 Hz audio. */
     filter?: string
+    /** Post effects on the dry voice, planned fresh for every line, ahead of `filter`. */
+    effects?: Effect[]
     /** Raw s16le mono 22050 Hz, played before a call's first line, and its length. */
     ring?: { file: string; ms: number }
   }
@@ -127,7 +132,9 @@ const problemsOf = (file: ModeFile, portraits: Record<string, Record<number, Por
     }
     if (file.band && !portraits) problems.push('band needs portraits.json')
     if (file.band && portraits && !portraits[call.host]) problems.push(`portraits.json has no ${call.host}`)
-    if (file.band?.layout !== undefined && file.band.layout !== 'codec') problems.push(`band.layout ${file.band.layout} is not a layout (codec, or leave it out)`)
+    if (file.band?.layout !== undefined && file.band.layout !== 'codec' && file.band.layout !== 'solo') {
+      problems.push(`band.layout ${file.band.layout} is not a layout (codec, solo, or leave it out)`)
+    }
   } else if (file.band) {
     problems.push('band needs a call (a cast)')
   }
@@ -155,6 +162,7 @@ const themeOf = (file: ModeFile, portraits: Record<string, Record<number, Portra
       dim: color(band.meter.dim, 0x333333),
     },
     layout: band.layout,
+    glyphs: band.glyphs ? [...band.glyphs] : undefined,
     frequencies: Object.fromEntries(
       cast.flatMap(([who, m]) => {
         const frequency = m.frequency ?? band.frequency

@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { Engine, PluginOptions, Register, Timer } from 'claude-code'
 
 import { codecCells } from './codec'
+import { withEffects } from './effects'
+import { soloCells, soloRowsFor } from './solo'
 import { courtCells, courtRowsFor } from './court'
 import { buildMode, callPersona, demoHas, isModeName, parseCall, planCall, type Mode } from './modes'
 import type { Setting, VoiceChoice } from '../types'
@@ -266,7 +268,9 @@ const othersOf = (mode: Mode) => Object.keys(mode.call!.cast).filter(who => who 
 
 const rowsWanted = () => {
   const mode = shownMode()
-  return mode?.theme && want ? courtRowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS) : undefined
+  if (!mode?.theme || !want) return undefined
+  const rowsFor = mode.theme.layout === 'solo' ? soloRowsFor : courtRowsFor
+  return rowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS)
 }
 
 /** A fresh frame at the size last measured, or undefined when the band does not fit. */
@@ -281,7 +285,7 @@ const nextFrame = async ($: Engine) => {
   const others = othersOf(mode)
   const beside = contact && others.includes(contact) ? contact : (others[0] ?? mode.call!.host)
   const inCast = (who: string | undefined) => (who && mode.call!.cast[who] ? who : undefined)
-  const cellsFor = mode.theme.layout === 'codec' ? codecCells : courtCells
+  const cellsFor = mode.theme.layout === 'codec' ? codecCells : mode.theme.layout === 'solo' ? soloCells : courtCells
   const cells = cellsFor(mode.theme, want.columns, rows, {
     speaker: inCast(speaker),
     contact: beside,
@@ -439,7 +443,9 @@ const playLine = async ($: Engine, text: string, mine: number, line: Line): Prom
 const pitched = (filter: string | undefined, pitch: number | undefined) => {
   if (!pitch || pitch === 1 || !(pitch > 0.5 && pitch < 2)) return filter
   const shift = `asetrate=22050*${pitch},aresample=22050,atempo=${(1 / pitch).toFixed(4)}`
-  return filter ? `${shift},${filter}` : shift
+  if (!filter) return shift
+  const input = filter.match(/^\s*\[0(?::a)?\]/)?.[0] ?? ''
+  return `${input}${shift},${filter.slice(input.length)}`
 }
 
 const added = new Set<string>()
@@ -470,11 +476,12 @@ const playVoiced = async ($: Engine, text: string, mine: number, line: Line, own
 /** Speaks `text` in the mode: one voice, or a call's lines in turn, each in its speaker's voice. */
 const perform = async ($: Engine, text: string, mine: number, mode: Mode | undefined) => {
   const filter = mode?.audio?.filter
+  const effects = mode?.audio?.effects
   const ring = mode?.audio?.ring
   if (!mode?.call) {
     const voice = await voiceOf($, mode)
     const owner = voice === mode?.voice ? mode?.voiceOwner : undefined
-    const error = await playVoiced($, text, mine, { voice, filter }, owner, `${mode?.title ?? 'Avatars'} narrator`)
+    const error = await playVoiced($, text, mine, { voice, filter: withEffects(effects, text, filter) }, owner, `${mode?.title ?? 'Avatars'} narrator`)
     if (error) $.ui.toast(`avatars: ${error}`)
     return
   }
@@ -491,7 +498,7 @@ const perform = async ($: Engine, text: string, mine: number, mode: Mode | undef
       mine,
       {
         voice: member.voice,
-        filter: pitched(filter, member.pitch),
+        filter: withEffects(effects, line.text, pitched(filter, member.pitch)),
         speaker: line.speaker,
         ...(i === 0 && ring ? { ring: `${mode.dir}/${ring.file}`, ringMs: ring.ms } : {}),
       },
@@ -1012,7 +1019,8 @@ export const register: Register = (on, opts) => {
     const previous = await read($, modelSetting)
     if (input.model) await update($, modelSetting, () => input.model!)
     try {
-      const { error } = await playLine($, input.text, mine, { voice, filter: pitched(input.filter ?? mode?.audio?.filter, input.pitch) })
+      const filter = pitched(input.filter ?? mode?.audio?.filter, input.pitch)
+      const { error } = await playLine($, input.text, mine, { voice, filter: withEffects(mode?.audio?.effects, input.text, filter) })
       return error ? answer(error, true) : answer('Played. Ask the user how it sounded.')
     } finally {
       if (input.model) await update($, modelSetting, () => previous)

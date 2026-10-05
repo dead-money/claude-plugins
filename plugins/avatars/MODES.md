@@ -39,6 +39,7 @@ There are two kinds of mode:
 | `call` | Makes it a cast mode. See below. |
 | `band` | The band's look. Needs `call` and `portraits.json`. |
 | `audio.filter` | An ffmpeg `-filter_complex` graph applied to every line (mono, 22050 Hz). |
+| `audio.effects` | Post effects on the dry voice, planned fresh for every line, ahead of the pitch and `filter`. See below. |
 | `audio.ring` | `{ "file": "ring.pcm", "ms": 1300 }`: raw s16le mono 22050 Hz audio played before a call's first line, and its length. |
 | `sample` | Lines played when someone switches to the mode. |
 | `demos` | Arrays of lines played by `/avatar test`. |
@@ -105,6 +106,31 @@ glyph is unused. `frequency` is the default frequency, which a member's own `fre
 overrides. Whoever is not talking is dimmed. Portraits may be taller than wide, but every
 member must be the same size. Below 12 rows the display makes way for the subtitles and the
 frequency moves into the top rule.
+
+`"layout": "solo"` draws one member alone: the host's portrait centred in falling glyph rain
+that quickens while they speak, the title and meter over the left rain and the subtitles over
+the right. `glyphs` sets the characters the rain falls in (each one cell wide). A solo mode is
+a cast of one: give `call.cast` a single member who is both `host` and `fallback`.
+
+## Audio effects
+
+`audio.effects` is a list of effects run on the voice in order, before any pitch shift and
+the mode's `filter`. Each line gets its own random timing, planned from its text.
+
+```json
+"effects": [
+  { "type": "stutter", "perSecond": 0.35, "repeats": [1, 3], "ms": [60, 120], "reverse": 0.15, "rush": 0.6, "rushRate": 1.2 },
+  { "type": "dropouts", "perSecond": 1.1, "ms": [30, 140], "static": 0.6, "hiss": 0.004 }
+]
+```
+
+- `stutter` replays a short fragment (`ms` long, `repeats` times, sometimes reversed) about
+  `perSecond` times a second. A share of stutters (`rush`) speed up into the word and slow
+  back out, faster and higher like tape, peaking at `rushRate`.
+- `dropouts` cuts the voice for `ms` about `perSecond` times a second, to static (a `static`
+  share of cuts) or near silence, with a little `hiss` under everything.
+
+A filter that names its input `[0]` still works: it reads the effects' output.
 
 ## Portraits
 
