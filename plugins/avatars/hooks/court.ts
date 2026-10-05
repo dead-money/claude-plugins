@@ -310,7 +310,7 @@ export const courtCells = (theme: CourtTheme, columns: number, rows: number, sta
         dot(ex + x, EMBLEM_TOP + y, (c(r) << 16) | (c(g) << 8) | c(b))
       }
     }
-    first = Math.ceil((EMBLEM_TOP + emblem.h) / 2) + 1
+    first = Math.ceil((EMBLEM_TOP + emblem.h) / 2)
   }
 
   const by = state.speaker ?? state.captionBy

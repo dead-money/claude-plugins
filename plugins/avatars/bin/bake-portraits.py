@@ -46,7 +46,7 @@ except ImportError:
 
 ROWS = [20, 16, 12, 10, 8]
 # The emblem's height in pixels for each band height that has room for it.
-EMBLEM_HEIGHTS = {20: 24, 16: 16, 12: 10}
+EMBLEM_HEIGHTS = {20: 20, 16: 14, 12: 10}
 REGION_OF = {'blink': 'eyes', 'talk_a': 'mouth', 'talk_b': 'mouth'}
 
 

@@ -15,6 +15,12 @@ characters. Cast modes show animated portraits above the prompt that blink, talk
 
   ![PROTOTYPE reporting a fixed test in Claude Code](docs/prototype.png)
 
+- **Arkham Exchange:** 1920s investigators telephone a Miskatonic University librarian with
+  your work as their latest ghastly discovery: a weary Irish sergeant, an antiquarian in a
+  fez and a fearless flapper heiress.
+
+  ![The Arkham Exchange reporting a fixed test in Claude Code](docs/arkham.png)
+
 - **Narrator:** one voice of your choice, with no portraits.
 
 To make your own, ask Claude to *create an avatars mode*. Its guide walks you through the

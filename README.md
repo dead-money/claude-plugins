@@ -16,6 +16,8 @@ characters with animated portraits above the prompt. Includes a guide for making
 
 ![PROTOTYPE reporting a fixed test in Claude Code](plugins/avatars/docs/prototype.png)
 
+![The Arkham Exchange reporting a fixed test in Claude Code](plugins/avatars/docs/arkham.png)
+
 ```
 /plugin install avatars@dead-money
 ```
