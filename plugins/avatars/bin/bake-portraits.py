@@ -23,7 +23,8 @@ each frame keeps only the areas that actually differ from neutral, which
 already hides most redraw drift.
 
 Writes <mode>/portraits.json: per member, per band height in terminal rows
-(20, 16, 12, 10, 8), a square portrait two pixels per row, frames as base64
+(20, 16, 12, 10, 8), a portrait two pixels per row, as wide as the crop's shape
+makes it (square without a crop), frames as base64
 RGB. --preview writes a contact sheet of every frame at 20 rows, scaled up.
 
 Needs Pillow and numpy: pip install pillow numpy
@@ -59,21 +60,21 @@ def masked_to_changes(frame, neutral):
     return Image.fromarray((b * (1 - m) + a * m).clip(0, 255).astype(np.uint8))
 
 
-def confined(frame, neutral, box, size):
+def confined(frame, neutral, box, w, h):
     """Keeps the frame only inside box (fractions), feathered."""
-    m = Image.new('L', (size, size), 0)
-    m.paste(255, (round(box[0] * size), round(box[1] * size), round(box[2] * size), round(box[3] * size)))
-    m = np.asarray(m.filter(ImageFilter.GaussianBlur(size / 40)), float)[..., None] / 255
+    m = Image.new('L', (w, h), 0)
+    m.paste(255, (round(box[0] * w), round(box[1] * h), round(box[2] * w), round(box[3] * h)))
+    m = np.asarray(m.filter(ImageFilter.GaussianBlur(h / 40)), float)[..., None] / 255
     return Image.fromarray((np.asarray(neutral, float) * (1 - m) + np.asarray(frame, float) * m).astype(np.uint8))
 
 
-def crisp(im, crop, size):
+def crisp(im, crop, w, h):
     """Crops to the head and downscales without turning to mud."""
-    w, h = im.size
-    im = im.crop((int(crop[0] * w), int(crop[1] * h), int(crop[2] * w), int(crop[3] * h)))
+    iw, ih = im.size
+    im = im.crop((int(crop[0] * iw), int(crop[1] * ih), int(crop[2] * iw), int(crop[3] * ih)))
     im = ImageEnhance.Contrast(ImageEnhance.Color(im).enhance(0.9)).enhance(1.12)
-    im = im.resize((size * 4, size * 4), Image.LANCZOS).filter(ImageFilter.UnsharpMask(3, 70, 2))
-    return im.resize((size, size), Image.LANCZOS)
+    im = im.resize((w * 4, h * 4), Image.LANCZOS).filter(ImageFilter.UnsharpMask(3, 70, 2))
+    return im.resize((w, h), Image.LANCZOS)
 
 
 def bake_member(art_dir, who, tune):
@@ -90,16 +91,18 @@ def bake_member(art_dir, who, tune):
         frame = Image.open(os.path.join(folder, name)).convert('RGB').resize(neutral.size, Image.LANCZOS)
         frames[stem] = masked_to_changes(frame, neutral)
     crop = tune.get('crop') or centred_square(*neutral.size)
+    aspect = (crop[2] - crop[0]) * neutral.size[0] / ((crop[3] - crop[1]) * neutral.size[1])
     sizes = {}
     for rows in ROWS:
-        size = rows * 2
-        base = crisp(neutral, crop, size)
+        h = rows * 2
+        w = round(h * aspect)
+        base = crisp(neutral, crop, w, h)
         baked = {}
         for name, im in frames.items():
-            q = base if name == 'neutral' else crisp(im, crop, size)
+            q = base if name == 'neutral' else crisp(im, crop, w, h)
             box = tune.get(REGION_OF.get(name, 'face'))
             if name != 'neutral' and box:
-                q = confined(q, base, box, size)
+                q = confined(q, base, box, w, h)
             baked[name] = q
         sizes[rows] = baked
     missing = [f for f in ('blink', 'talk_a', 'talk_b') if f not in frames]
@@ -129,8 +132,8 @@ def main():
             print(f'{who}: no {", ".join(missing)} frame(s); that part of the animation stays still')
         out[who] = {
             str(rows): {
-                'w': rows * 2,
-                'h': rows * 2,
+                'w': frames['neutral'].size[0],
+                'h': frames['neutral'].size[1],
                 'frames': {name: base64.b64encode(np.asarray(im).tobytes()).decode() for name, im in frames.items()},
             }
             for rows, frames in sizes.items()
@@ -143,12 +146,14 @@ def main():
     print(f'wrote {path} ({os.path.getsize(path) // 1024} KB, {len(out)} members)')
 
     if preview:
-        scale, cell = 6, 40 * 6
+        scale = 6
+        cell_w = max(im.size[0] for row in sheet_rows for im in row) * scale
+        cell_h = 40 * scale
         cols = max(len(r) for r in sheet_rows)
-        sheet = Image.new('RGB', (cols * (cell + 8), len(sheet_rows) * (cell + 8)), (16, 16, 16))
+        sheet = Image.new('RGB', (cols * (cell_w + 8), len(sheet_rows) * (cell_h + 8)), (16, 16, 16))
         for y, row in enumerate(sheet_rows):
             for x, im in enumerate(row):
-                sheet.paste(im.resize((cell, cell), Image.NEAREST), (x * (cell + 8), y * (cell + 8)))
+                sheet.paste(im.resize((im.size[0] * scale, cell_h), Image.NEAREST), (x * (cell_w + 8), y * (cell_h + 8)))
         sheet.save(preview)
         print(f'wrote {preview}: one row per member, frames in order {", ".join(sizes[20])}')
 

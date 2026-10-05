@@ -1,6 +1,6 @@
 {
   "name": "avatars",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Claude speaks a short version of each reply through ElevenLabs, as a narrator or a cast of characters with animated portraits above the prompt",
   "author": {
     "name": "Dead Money"
