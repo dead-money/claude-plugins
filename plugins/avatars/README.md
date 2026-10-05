@@ -10,7 +10,6 @@ characters. Cast modes show animated portraits above the prompt that blink, talk
 
 - **The Coven:** an ancient vampire queen and her catty ladies, who report your work to
   her with innuendo (suggestive, never explicit).
-- **Skrap-Vox:** two orks and their grot on a crackling scrap-built vox.
 - **Narrator:** one voice of your choice, with no portraits.
 
 To make your own, ask Claude to *create an avatars mode*. Its guide walks you through the
