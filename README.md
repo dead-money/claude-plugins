@@ -14,6 +14,8 @@ characters with animated portraits above the prompt. Includes a guide for making
 
 ![The Coven reporting a fixed test in Claude Code](plugins/avatars/docs/screenshot.png)
 
+![PROTOTYPE reporting a fixed test in Claude Code](plugins/avatars/docs/prototype.png)
+
 ```
 /plugin install avatars@dead-money
 ```
