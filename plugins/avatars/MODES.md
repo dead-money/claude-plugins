@@ -12,6 +12,10 @@ The folder name is the mode's name: lowercase letters, digits, `-` and `_`.
   art/              your source images and bake.json (only the bake script reads these)
 ```
 
+To change only voices, not a whole mode, use `~/.claude/avatars/voices.json`:
+`{ "coven": { "ankhara": "<voice id>" } }` (single-voice modes use the key `voice`).
+`/avatar recast <character> <voice id>` writes this file for the current mode.
+
 After editing, run `/avatar reload` (or ask Claude to check the mode, which reloads too).
 
 There are two kinds of mode:

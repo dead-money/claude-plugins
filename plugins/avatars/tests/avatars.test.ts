@@ -62,9 +62,13 @@ const engine = (on: On, files: Record<string, string> = {}) => {
   const toasts: string[] = []
   const configSets: Array<{ key: string; value: unknown }> = []
   const relative = (path: string) =>
-    path.includes('/.claude/avatars/modes') ? path.replace(/^.*\/\.claude\/avatars\/modes/, '/home/modes') : path.replace(/^.*?\/modes(?=\/|$)/, '/plugin/modes')
+    path.includes('/.claude/avatars/') ? path.replace(/^.*\/\.claude\/avatars\//, '/home/') : path.replace(/^.*?\/modes(?=\/|$)/, '/plugin/modes')
   const isDir = (path: string) => Object.keys(fs).some(f => f.startsWith(`${relative(path)}/`))
   on('fs.exists', async (_$, e) => ({ value: relative(e.path) in fs || isDir(e.path) }) as never)
+  on('fs.write', async (_$, e) => {
+    fs[relative(e.path)] = e.text
+    return { value: undefined } as never
+  })
   on('fs.read', async (_$, e) => {
     const text = fs[relative(e.path)]
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
@@ -288,4 +292,34 @@ test('check_mode rejects a folder name that cannot be a mode name', async ($, on
   engine(on)
   const r = await $.tool.call({ tool: 'mcp__avatars__check_mode', input: { path: '/home/me/.claude/avatars/modes/My Mode' } } as never)
   expect(JSON.stringify(r)).toContain('must be lowercase')
+})
+
+test('search_voices queries the shared library with the key and lists ids', WITH_KEY, async ($, on) => {
+  engine(on)
+  const asked: Array<{ url: string; key?: string }> = []
+  on('http.fetch', async (_$, e) => {
+    asked.push({ url: e.url, key: e.init?.headers?.['xi-api-key'] })
+    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ voices: [{ voice_id: 'Shared00000000000000', public_owner_id: 'owner1', name: 'Queenly', accent: 'egyptian' }] }) } } as never
+  })
+  const r = await $.tool.call({ tool: 'mcp__avatars__search_voices', input: { query: 'regal queen', gender: 'female' } } as never)
+  expect(asked[0]?.url).toBe('https://api.elevenlabs.io/v1/shared-voices?search=regal%20queen&page_size=12&gender=female')
+  expect(asked[0]?.key).toBe(KEY)
+  expect(JSON.stringify(r)).toContain('Shared00000000000000')
+})
+
+test('/avatar recast gives a character a personal voice that survives a reload, and undoes it', WITH_KEY, async ($, on) => {
+  const { spawned, fs } = engine(on)
+  const clock = mock.clock(on, { now: 1_000 })
+  await run($, 'reload')
+  await run($, 'mode duo')
+  await clock.advance(2_000)
+  expect((await run($, 'recast boss Personal000000000000')).text).toContain('boss in The Duo now speaks with Personal000000000000')
+  expect(JSON.parse(fs['/home/voices.json']!)).toEqual({ duo: { boss: 'Personal000000000000' } })
+  await run($, 'reload')
+  spawned.length = 0
+  await run($, 'test 1')
+  await clock.advance(2_000)
+  expect(curlOf(spawned[0]!.input).url).toContain('/Personal000000000000/')
+  expect((await run($, 'recast boss')).text).toContain("back to the mode's own voice")
+  expect(JSON.parse(fs['/home/voices.json']!)).toEqual({})
 })

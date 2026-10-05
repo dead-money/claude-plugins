@@ -44,6 +44,9 @@ let isInteractive = true
 let isLoaded = false
 let isWindows = false
 let userModesDir = ''
+/** The person's own voices for any mode's characters: `{ mode: { member: voiceId } }`. */
+let voicesFile = ''
+let personal: Record<string, Record<string, string>> = {}
 
 const option = (name: string) => {
   const value = options[name]
@@ -65,7 +68,9 @@ const readMode = async ($: Engine, dir: string, name: string) => {
 const reloadModes = async ($: Engine) => {
   isWindows = /^[A-Za-z]:[\\/]/.test($.plugin.root) || $.plugin.root.includes('\\')
   const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
-  userModesDir = home ? `${home.replace(/[\\/]+$/, '')}/.claude/avatars/modes` : ''
+  const avatarsDir = home ? `${home.replace(/[\\/]+$/, '')}/.claude/avatars` : ''
+  userModesDir = avatarsDir && `${avatarsDir}/modes`
+  voicesFile = avatarsDir && `${avatarsDir}/voices.json`
   const found = new Map<string, Mode>()
   const errors: string[] = []
   for (const root of [`${$.plugin.root}/modes`, userModesDir]) {
@@ -76,6 +81,22 @@ const reloadModes = async ($: Engine) => {
       const mode = await readMode($, dir, entry.name)
       if (typeof mode === 'string') errors.push(mode)
       else found.set(mode.name, mode)
+    }
+  }
+  personal = {}
+  if (voicesFile && (await $.fs.exists(voicesFile))) {
+    try {
+      personal = JSON.parse(await $.fs.read(voicesFile))
+    } catch (err) {
+      errors.push(`voices.json does not parse (${String(err)})`)
+    }
+  }
+  for (const [name, voices] of Object.entries(personal)) {
+    const mode = found.get(name)
+    if (!mode) continue
+    for (const [who, voice] of Object.entries(voices)) {
+      if (mode.call?.cast[who]) mode.call.cast[who]!.voice = voice
+      else if (who === 'voice' && !mode.call) mode.voice = voice
     }
   }
   modes = found
@@ -505,6 +526,28 @@ const setModel = async ($: Engine, model: string) => {
   return `Model set to ${model}${hasTags(model) ? ' (audio tags on)' : ''}.`
 }
 
+/** Gives a character of the current mode the person's own voice, kept in voices.json. */
+const recast = async ($: Engine, who: string, voiceArg: string) => {
+  const mode = await modeOf($)
+  if (!mode) return 'Pick a mode first.'
+  if (!voicesFile) return 'No home folder to keep voices.json in.'
+  const members = mode.call ? Object.keys(mode.call.cast) : ['voice']
+  const member = members.find(m => m === who.toLowerCase())
+  if (!member) return `${mode.title} has no ${who}. Characters: ${members.join(', ')}.`
+  const voice = voiceArg ? parseVoice(voiceArg) : undefined
+  if (voiceArg && !voice) return `Not a voice id or URL: ${voiceArg}`
+  const mine = { ...(personal[mode.name] ?? {}) }
+  if (voice) mine[member] = voice
+  else delete mine[member]
+  const next = { ...personal, [mode.name]: mine }
+  if (!Object.keys(mine).length) delete next[mode.name]
+  await $.fs.write(voicesFile, `${JSON.stringify(next, null, 2)}\n`)
+  await reloadModes($)
+  return voice
+    ? `${member} in ${mode.title} now speaks with ${voice} (kept in ${voicesFile}).`
+    : `${member} in ${mode.title} is back to the mode's own voice.`
+}
+
 const playDemo = async ($: Engine, arg: string) => {
   const mode = await modeOf($)
   if (!mode) return 'Avatars are off for this session: pick a mode first.'
@@ -578,6 +621,8 @@ const doctor = async ($: Engine) => {
     const ffplay = await $.process.run(['ffplay', '-hide_banner', '-version'], { timeoutMs: 10_000 }).catch(() => undefined)
     out.push(ffplay?.exitCode === 0 ? 'ffplay: found.' : 'ffplay: not found. It ships with the usual ffmpeg builds (winget install Gyan.FFmpeg).')
   }
+  const recastCount = Object.values(personal).reduce((n, voices) => n + Object.keys(voices).length, 0)
+  if (recastCount) out.push(`Your own voices: ${recastCount} character(s), from ${voicesFile}.`)
   if (modeErrors.length) out.push(`Modes that did not load: ${modeErrors.join(' | ')}`)
   if (key) {
     for (const mode of modes.values()) {
@@ -601,6 +646,7 @@ const USAGE = [
   '/avatar test [n|name]    play a demo of the mode',
   '/avatar replay | stop',
   '/avatar voice <id|url>   the voice for single-voice modes',
+  '/avatar recast <who> [id] your own voice for a character (no id: back to the default)',
   '/avatar model <id>       the ElevenLabs model',
   '/avatar scenario [name]  play a scripted call',
   '/avatar default          save this session as the default',
@@ -856,6 +902,10 @@ export const register: Register = (on, opts) => {
       }
       case 'model':
         return { text: await setModel($, arg) }
+      case 'recast': {
+        const [who = '', voice = ''] = rest
+        return { text: who ? await recast($, who, voice) : `Usage: /avatar recast <character> [voice id or URL]` }
+      }
       case 'scenario':
         return { text: await playScenario($, arg.toLowerCase()) }
       case 'default':
@@ -873,10 +923,11 @@ export const register: Register = (on, opts) => {
 
   on('tool.call', { tool: 'mcp__avatars__search_voices' }, async ($, e) => {
     const input = e.input as { query: string; gender?: string; age?: string; accent?: string; limit?: number }
-    const params = new URLSearchParams({ search: input.query, page_size: String(Math.min(30, input.limit ?? 12)) })
-    for (const field of ['gender', 'age', 'accent'] as const) if (input[field]) params.set(field, input[field]!)
+    const params: Array<[string, string]> = [['search', input.query], ['page_size', String(Math.min(30, input.limit ?? 12))]]
+    for (const field of ['gender', 'age', 'accent'] as const) if (input[field]) params.push([field, input[field]!])
+    const query = params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
     try {
-      const body = await fetchJson($, `/v1/shared-voices?${params}`)
+      const body = await fetchJson($, `/v1/shared-voices?${query}`)
       const voices = (body.voices as Array<ApiVoice & { accent?: string }> | undefined) ?? []
       if (!voices.length) return answer('No voices matched; try broader words.')
       return answer(`${voices.map(voiceLine).join('\n')}\n\nAudition one with the audition tool before choosing.`)

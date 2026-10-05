@@ -45,6 +45,7 @@ your choice as the default. Changes apply to the current session unless you save
 | `/avatar test [n\|name]` | Play a demo scene |
 | `/avatar replay` / `stop` | Repeat the last reply, or stop speaking |
 | `/avatar voice <id>` / `model <id>` | Set the narrator voice or the ElevenLabs model |
+| `/avatar recast <who> [id]` | Give a character your own voice (no id restores the default) |
 | `/avatar scenario [name]` | Play a longer scripted scene |
 | `/avatar doctor` | Check the key, ffmpeg and voices |
 
