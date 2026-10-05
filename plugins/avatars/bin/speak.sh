@@ -13,7 +13,7 @@ raw=(-f s16le -ar 22050 -ac 1)
 # Raw s16le mono 22050 Hz on stdin to the speakers.
 play_raw() {
   if [ "$(uname -s)" = Darwin ]; then
-    if "$ff" -hide_banner -devices 2>/dev/null | grep -q audiotoolbox; then
+    if "$ff" -hide_banner -devices </dev/null 2>/dev/null | grep -q audiotoolbox; then
       "$ff" -hide_banner -loglevel error "${raw[@]}" -i - -f audiotoolbox -
     else
       "$ff" -hide_banner -loglevel error "${raw[@]}" -i - -f wav - | ffplay -hide_banner -nodisp -autoexit -loglevel error -i -
