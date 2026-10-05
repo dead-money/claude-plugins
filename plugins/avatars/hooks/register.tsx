@@ -40,7 +40,8 @@ const pick = <T,>(list: readonly T[]) => list[Math.floor(Math.random() * list.le
 let modes = new Map<string, Mode>()
 let modeErrors: string[] = []
 let options: PluginOptions = {}
-let isInteractive = false
+let isInteractive = true
+let isLoaded = false
 let isWindows = false
 let userModesDir = ''
 
@@ -71,7 +72,7 @@ const reloadModes = async ($: Engine) => {
     if (!root || !(await $.fs.exists(root))) continue
     for (const entry of await $.fs.list(root)) {
       const dir = `${root}/${entry.name}`
-      if (entry.kind !== 'directory' || !isModeName(entry.name) || !(await $.fs.exists(`${dir}/mode.json`))) continue
+      if (entry.kind !== 'dir' || !isModeName(entry.name) || !(await $.fs.exists(`${dir}/mode.json`))) continue
       const mode = await readMode($, dir, entry.name)
       if (typeof mode === 'string') errors.push(mode)
       else found.set(mode.name, mode)
@@ -79,6 +80,14 @@ const reloadModes = async ($: Engine) => {
   }
   modes = found
   modeErrors = errors
+  isLoaded = true
+}
+
+/** Loads the modes on first use when the plugin arrived after the session started. */
+const ensureLoaded = async ($: Engine) => {
+  if (isLoaded) return
+  await reloadModes($)
+  if (isInteractive) await showBand($, await modeOf($))
 }
 
 // ── Settings: this session's, over the plugin's configured defaults ──
@@ -693,6 +702,7 @@ export const register: Register = (on, opts) => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    await ensureLoaded($)
     const isMainAnswer = e.agentId === undefined && e.reason === 'answer' && e.answer.trim() !== ''
     if (isInteractive && isMainAnswer && (await isEnabled($)) && (await modeOf($))) {
       background($, speakReply($, e.answer))
@@ -805,6 +815,7 @@ export const register: Register = (on, opts) => {
   })
 
   on('command.run', { command: 'avatar' }, async ($, e) => {
+    await ensureLoaded($)
     const [verb = '', ...rest] = e.args.trim().split(/\s+/)
     const arg = rest.join(' ')
 
@@ -902,7 +913,7 @@ export const register: Register = (on, opts) => {
   })
 
   on('tool.call', { tool: 'mcp__avatars__paths' }, async $ => {
-    if (!userModesDir) await reloadModes($)
+    await ensureLoaded($)
     const root = $.plugin.root
     return answer(
       [

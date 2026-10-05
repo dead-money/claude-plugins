@@ -73,7 +73,7 @@ const engine = (on: On, files: Record<string, string> = {}) => {
   on('fs.list', async (_$, e) => {
     const base = relative(e.path ?? '')
     const names = new Set(Object.keys(fs).filter(f => f.startsWith(`${base}/`)).map(f => f.slice(base.length + 1).split('/')[0]!))
-    return { value: [...names].map(name => ({ name, kind: 'directory', size: 0, mtimeMs: 0, isLink: false })) } as never
+    return { value: [...names].map(name => ({ name, kind: 'dir', size: 0, mtimeMs: 0, isLink: false })) } as never
   })
   on('ui.toast', async (_$, e) => {
     toasts.push(String((e as { text?: string }).text ?? ''))
