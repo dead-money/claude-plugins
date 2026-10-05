@@ -8,9 +8,9 @@
 import { cellSafe, clamp01, courtPanel, courtPixels, fade, GAP, packCells, wrapRows, type CourtState, type CourtTheme } from './court'
 
 const DEFAULT_FREQUENCY = '140.85'
-/** The display's box, in pixels from the top: room for the bars and a digit, at every band of 12 rows or more. */
+/** The display's box, in pixels from the top: a digit with one pixel above and below, at every band of 12 rows or more. */
 const BOX_TOP = 2
-const BOX_BOTTOM = 15
+const BOX_BOTTOM = 14
 /** Below this the display gives its rows to the subtitles and the frequency moves into the top rule. */
 const DISPLAY_MIN_ROWS = 12
 
@@ -105,17 +105,16 @@ export const codecCells = (theme: CourtTheme, columns: number, rows: number, sta
     for (let y = BOX_TOP + 1; y < BOX_BOTTOM; y++) for (let x = boxLeft + 1; x < boxRight; x++) dot(x, y, screen)
 
     // Signal bars lengthening downward; the voice lights them from the bottom.
-    const barTop = BOX_TOP + 2
-    const bars = Math.floor((BOX_BOTTOM - 2 - barTop + 1) / 2)
+    const digitTop = (BOX_TOP + BOX_BOTTOM + 1 - DIGIT_H) / 2
+    const bars = (DIGIT_H + 1) / 2
     const litBars = Math.round(clamp01(state.level) * bars)
     for (let i = 0; i < bars; i++) {
       const length = Math.round(2 + 3 * ((i + 1) / bars) ** 0.6)
-      for (let x = 0; x < length; x++) dot(boxLeft + 2 + x, barTop + i * 2, bars - i <= litBars ? lit : dim)
+      for (let x = 0; x < length; x++) dot(boxLeft + 2 + x, digitTop + i * 2, bars - i <= litBars ? lit : dim)
     }
 
     // The caller's frequency, unlit segments ghosted.
     const digits = [...frequency].filter(c => c !== '.').length
-    const digitTop = Math.round((BOX_TOP + BOX_BOTTOM - DIGIT_H) / 2)
     let x = boxRight - 1 - (digits * (DIGIT_W + 1) + 2)
     for (const ch of frequency) {
       if (ch === '.') {
