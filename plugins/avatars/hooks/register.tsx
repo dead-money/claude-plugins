@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Engine, PluginOptions, Register, Timer } from 'claude-code'
 
-import { codecCells, codecRowsFor } from './codec'
+import { codecCells } from './codec'
 import { courtCells, courtRowsFor } from './court'
 import { buildMode, callPersona, demoHas, isModeName, parseCall, planCall, type Mode } from './modes'
 import type { Setting, VoiceChoice } from '../types'
@@ -266,9 +266,7 @@ const othersOf = (mode: Mode) => Object.keys(mode.call!.cast).filter(who => who 
 
 const rowsWanted = () => {
   const mode = shownMode()
-  if (!mode?.theme || !want) return undefined
-  const rowsFor = mode.theme.layout === 'codec' ? codecRowsFor : courtRowsFor
-  return rowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS)
+  return mode?.theme && want ? courtRowsFor(mode.theme, want.maxRows, want.columns, PREFER_ROWS) : undefined
 }
 
 /** A fresh frame at the size last measured, or undefined when the band does not fit. */

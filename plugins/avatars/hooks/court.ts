@@ -191,7 +191,7 @@ const courtFits = (theme: CourtTheme, rows: number, columns: number) => {
  * Fixed: the band's width wobbles a few columns as the UI
  * around the prompt changes, and a panel that followed it would flicker.
  */
-const courtPanel = (theme: CourtTheme, rows: number, columns: number) => {
+export const courtPanel = (theme: CourtTheme, rows: number, columns: number) => {
   const art = theme.portraits[theme.host]![rows]
   return art && 2 * (art.w + 2) + 2 * GAP + COURT_PANEL <= columns ? COURT_PANEL : 0
 }

@@ -1,19 +1,18 @@
 // The codec band, a court layout in the style of a 1998 stealth game's radio:
-// whoever is on the line on the left, the host on the right, a panel between
-// with signal bars and the frequency on a seven-segment display, and the
-// subtitles beside the host. Colours come from the mode's band: `frame` and
-// `frameLit` for the borders, the meter's `lit` and `dim` for the display.
+// whoever is on the line on the left, the host on the right, and a panel
+// between with signal bars and the frequency on a seven-segment display above
+// the subtitles. Sized exactly like the court. Colours come from the mode's
+// band: `frame` and `frameLit` for the borders, the meter's `lit` and `dim`
+// for the display.
 
-import { cellSafe, clamp01, courtPixels, fade, GAP, packCells, wrapRows, type CourtState, type CourtTheme } from './court'
+import { cellSafe, clamp01, courtPanel, courtPixels, fade, GAP, packCells, wrapRows, type CourtState, type CourtTheme } from './court'
 
-const CODEC_ROWS = [20, 16, 12, 10, 8]
-const PANEL = 48
-const CAPTION_MIN = 24
-const CAPTION_MAX = 70
-const SPARE = 4
-/** Below this the panel is not worth shrinking the portraits for, unless the band can't be taller anyway. */
-const PANEL_MIN_ROWS = 12
 const DEFAULT_FREQUENCY = '140.85'
+/** The display's box, in pixels from the top: room for the bars and a digit, at every band of 12 rows or more. */
+const BOX_TOP = 2
+const BOX_BOTTOM = 15
+/** Below this the display gives its rows to the subtitles and the frequency moves into the top rule. */
+const DISPLAY_MIN_ROWS = 12
 
 /** Seven segments on a 5x9 pixel grid: [x, y] pixels per segment a..g. */
 const SEGMENTS: Array<Array<[number, number]>> = [
@@ -32,59 +31,10 @@ const DIGIT_SEGMENTS: Record<string, string> = {
   '5': 'acdfg', '6': 'acdefg', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg',
 }
 
-/** The left frame is as wide as the widest caller, so a new caller never moves the layout. */
-const slotOf = (theme: CourtTheme, rows: number) => {
-  const others = Object.keys(theme.portraits).filter(who => who !== theme.host)
-  const widths = (others.length ? others : [theme.host]).map(who => theme.portraits[who]?.[rows]?.w ?? 0)
-  return Math.max(...widths)
-}
-
-type Layout = { slot: number; host: number; panel: boolean; caption: number }
-
-/** What fits at this size: frames always, then the subtitles, then the panel. */
-const layoutAt = (theme: CourtTheme, rows: number, columns: number): Layout | undefined => {
-  const host = theme.portraits[theme.host]?.[rows]?.w
-  if (host === undefined) return undefined
-  const slot = slotOf(theme, rows)
-  const frames = slot + 2 + 1 + host + 2
-  if (frames > columns) return undefined
-  const room = (used: number) => Math.min(columns - used - GAP - 1, CAPTION_MAX)
-  const withPanel = room(slot + 2 + GAP + PANEL + GAP + host + 2)
-  if (withPanel >= CAPTION_MIN) return { slot, host, panel: true, caption: withPanel }
-  const plain = room(frames)
-  return { slot, host, panel: false, caption: plain >= CAPTION_MIN ? plain : 0 }
-}
-
-const codecLastRows = new Map<string, number | undefined>()
-
-/**
- * The tallest band with the panel and subtitles, while that is at least PANEL_MIN_ROWS tall;
- * else the tallest with subtitles; else the tallest that fits.
- */
-export const codecRowsFor = (theme: CourtTheme, maxRows: number, columns: number, preferRows: number) => {
-  const best = (spare: number) => {
-    const sizes = CODEC_ROWS.filter(r => r <= Math.min(maxRows, preferRows)).map(r => [r, layoutAt(theme, r, columns - spare)] as const)
-    const fitting = sizes.filter(([, l]) => l !== undefined)
-    const tallest = fitting[0]?.[0] ?? 0
-    const panelled = fitting.find(([r, l]) => l!.panel && r >= Math.min(PANEL_MIN_ROWS, tallest))
-    return (panelled ?? fitting.find(([, l]) => l!.caption > 0) ?? fitting[0])?.[0]
-  }
-  // Hysteresis, as for the court: a width hovering at a threshold must not flip the band between sizes.
-  const last = codecLastRows.get(theme.title)
-  const now = best(0)
-  const roomy = best(SPARE)
-  const keep = last !== undefined && now !== undefined && last <= now && (roomy ?? 0) <= last
-  const rows = keep ? last : (roomy ?? now)
-  codecLastRows.set(theme.title, rows)
-  return rows
-}
-
 /** A codec band's cells for one frame, `rows` tall. */
 export const codecCells = (theme: CourtTheme, columns: number, rows: number, state: CourtState) => {
-  const layout = layoutAt(theme, rows, columns)
   const H = rows * 2
   const pixels: Array<number | undefined> = Array.from({ length: columns * H }, () => undefined)
-  if (!layout) return packCells(columns, rows, pixels, new Map())
   const dot = (x: number, y: number, color: number) => {
     if (x >= 0 && x < columns && y >= 0 && y < H) pixels[y * columns + x] = color
   }
@@ -95,15 +45,17 @@ export const codecCells = (theme: CourtTheme, columns: number, rows: number, sta
     })
   const mid = fade(theme.frame, theme.frameLit, 0.5)
   const { lit, dim } = theme.meter
+  // Every frame is as wide as the host's portrait, so a new caller never moves the layout.
+  const slot = theme.portraits[theme.host]![rows]!.w
 
   // A portrait centred in its frame: lit while talking, dimmed while the other talks.
-  const portrait = (who: string, x0: number, slot: number, face: string) => {
+  const portrait = (who: string, x0: number, face: string) => {
     const { art, rgb } = courtPixels(theme, who, rows, face)
     const pad = Math.floor((slot - art.w) / 2)
     const isTalking = state.speaker === who
     const k = state.speaker && !isTalking ? 0.5 : 1
     for (let y = 0; y < Math.min(art.h, H); y++) {
-      for (let x = 0; x < art.w; x++) {
+      for (let x = Math.max(0, -pad); x < Math.min(art.w, slot - pad); x++) {
         const i = (y * art.w + x) * 3
         dot(x0 + 1 + pad + x, y, (Math.round((rgb[i] ?? 0) * k) << 16) | (Math.round((rgb[i + 1] ?? 0) * k) << 8) | Math.round((rgb[i + 2] ?? 0) * k))
       }
@@ -117,53 +69,54 @@ export const codecCells = (theme: CourtTheme, columns: number, rows: number, sta
       dot(x, 0, border)
       dot(x, H - 1, border)
     }
-    return x0 + slot + 2
   }
 
-  const afterLeft = portrait(state.contact, 0, layout.slot, state.faces.contact)
-  const px0 = afterLeft + GAP
-  const afterRight = portrait(theme.host, layout.panel ? px0 + PANEL + GAP : afterLeft + 1, layout.host, state.faces.host)
+  const frameWidth = slot + 2
+  const panel = courtPanel(theme, rows, columns)
+  const px0 = frameWidth + GAP
+  portrait(state.contact, 0, state.faces.contact)
+  portrait(theme.host, panel ? px0 + panel + GAP : frameWidth + 1, state.faces.host)
+  if (!panel) return packCells(columns, rows, pixels, text)
 
-  if (layout.panel) {
-    // The title above and the meter's label below, each on a rule; a lit screen between.
-    const label = (y: number, name: string) => {
-      write(px0, y, '─'.repeat(PANEL), theme.frame)
-      write(px0 + Math.floor((PANEL - name.length - 2) / 2), y, ` ${name} `, state.speaker ? mid : theme.frame)
-    }
-    label(0, theme.title)
-    label(rows - 1, theme.meter.label)
-    write(px0 - 2, Math.floor(rows / 2), '<', theme.frame)
-    write(px0 + PANEL + 1, Math.floor(rows / 2), '>', theme.frame)
+  const frequency = theme.frequencies?.[state.contact] ?? DEFAULT_FREQUENCY
+  const hasDisplay = rows >= DISPLAY_MIN_ROWS
+  const centred = (y: number, s: string, fg: number) => write(px0 + Math.floor((panel - [...s].length) / 2), y, s, fg)
+  const label = (y: number, name: string) => {
+    write(px0, y, '─'.repeat(panel), theme.frame)
+    centred(y, ` ${name} `, state.speaker ? mid : theme.frame)
+  }
+  label(0, hasDisplay ? theme.title : `${theme.title}   ${frequency}`)
+  label(rows - 1, theme.meter.label)
+  write(px0 - 2, Math.floor(rows / 2), '<', theme.frame)
+  write(px0 + panel + 1, Math.floor(rows / 2), '>', theme.frame)
 
-    const boxTop = rows >= 12 ? 3 : 2
-    const boxBottom = H - 1 - boxTop
+  if (hasDisplay) {
     const boxLeft = px0 + 2
-    const boxRight = px0 + PANEL - 3
+    const boxRight = px0 + panel - 3
     for (let x = boxLeft; x <= boxRight; x++) {
-      dot(x, boxTop, mid)
-      dot(x, boxBottom, mid)
+      dot(x, BOX_TOP, mid)
+      dot(x, BOX_BOTTOM, mid)
     }
-    for (let y = boxTop; y <= boxBottom; y++) {
+    for (let y = BOX_TOP; y <= BOX_BOTTOM; y++) {
       dot(boxLeft, y, mid)
       dot(boxRight, y, mid)
     }
     const screen = fade(dim, 0, 0.7)
-    for (let y = boxTop + 1; y < boxBottom; y++) for (let x = boxLeft + 1; x < boxRight; x++) dot(x, y, screen)
+    for (let y = BOX_TOP + 1; y < BOX_BOTTOM; y++) for (let x = boxLeft + 1; x < boxRight; x++) dot(x, y, screen)
 
     // Signal bars lengthening downward; the voice lights them from the bottom.
-    const barTop = boxTop + 2
-    const bars = Math.floor((boxBottom - 2 - barTop + 1) / 2)
+    const barTop = BOX_TOP + 2
+    const bars = Math.floor((BOX_BOTTOM - 2 - barTop + 1) / 2)
     const litBars = Math.round(clamp01(state.level) * bars)
     for (let i = 0; i < bars; i++) {
-      const length = Math.round(2 + 4 * ((i + 1) / bars) ** 0.6)
+      const length = Math.round(2 + 3 * ((i + 1) / bars) ** 0.6)
       for (let x = 0; x < length; x++) dot(boxLeft + 2 + x, barTop + i * 2, bars - i <= litBars ? lit : dim)
     }
 
     // The caller's frequency, unlit segments ghosted.
-    const frequency = theme.frequencies?.[state.contact] ?? DEFAULT_FREQUENCY
     const digits = [...frequency].filter(c => c !== '.').length
-    const digitTop = Math.round((boxTop + boxBottom - DIGIT_H) / 2)
-    let x = boxRight - 2 - (digits * (DIGIT_W + 1) + 2)
+    const digitTop = Math.round((BOX_TOP + BOX_BOTTOM - DIGIT_H) / 2)
+    let x = boxRight - 1 - (digits * (DIGIT_W + 1) + 2)
     for (const ch of frequency) {
       if (ch === '.') {
         dot(x, digitTop + DIGIT_H - 1, lit)
@@ -178,15 +131,19 @@ export const codecCells = (theme: CourtTheme, columns: number, rows: number, sta
     }
   }
 
+  // Who speaks and what, centred in the rows the display leaves.
   const by = state.speaker ?? state.captionBy
-  if (layout.caption && state.caption) {
-    const capLeft = afterRight + GAP
-    const top = Math.max(0, Math.floor(rows / 2) - 3)
+  if (state.caption) {
+    const first = hasDisplay ? Math.ceil((BOX_BOTTOM + 1) / 2) : 1
+    const space = rows - 1 - first
+    const gap = space >= 5 ? 1 : 0
+    const lines = wrapRows(cellSafe(state.caption), panel - 4, Math.max(1, space - (by ? 1 + gap : 0)))
+    const top = first + Math.max(0, Math.floor((space - lines.length - (by ? 1 + gap : 0)) / 2))
     if (by) {
       const ink = theme.ink[by] ?? theme.subtitle
-      write(capLeft, top, theme.names[by] ?? by.toUpperCase(), state.speaker ? ink : fade(ink, 0, 0.35))
+      centred(top, theme.names[by] ?? by.toUpperCase(), state.speaker ? ink : fade(ink, 0, 0.35))
     }
-    wrapRows(cellSafe(state.caption), layout.caption, Math.max(1, rows - top - 2)).forEach((line, i) => write(capLeft, top + 2 + i, line, theme.subtitle))
+    lines.forEach((line, i) => centred(top + (by ? 1 + gap : 0) + i, line, theme.subtitle))
   }
 
   return packCells(columns, rows, pixels, text)
