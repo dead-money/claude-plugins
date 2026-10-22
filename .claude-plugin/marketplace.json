@@ -14,7 +14,7 @@
       "name": "necromancer",
       "source": { "source": "git-subdir", "url": "https://github.com/dead-money/necromancer.git", "path": "plugins/claude-code" },
       "description": "Necromancer rooms, messages and activity for Claude Code (Dead Money internal; needs access to the private repo)",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "category": "productivity"
     }
   ]
