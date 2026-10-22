@@ -9,6 +9,13 @@
       "description": "Claude speaks a short version of each reply through ElevenLabs, as a narrator or a cast of characters with animated portraits above the prompt",
       "version": "0.1.18",
       "category": "fun"
+    },
+    {
+      "name": "necromancer",
+      "source": { "source": "git-subdir", "url": "dead-money/necromancer", "path": "plugins/claude-code" },
+      "description": "Necromancer rooms, messages and activity for Claude Code (Dead Money internal; needs access to the private repo)",
+      "version": "0.1.0",
+      "category": "productivity"
     }
   ]
 }
